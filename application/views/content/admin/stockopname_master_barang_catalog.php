@@ -29,9 +29,11 @@
                     <select id="filterQrStatus" class="form-control form-control-sm" style="max-width:210px">
                         <option value="">Semua</option><option value="generated">Sudah digenerate</option><option value="not_generated">Belum digenerate</option>
                     </select>
+                    <button type="button" class="btn btn-success btn-sm" id="printSelectedCards" disabled>Cetak Tercentang (<span id="selectedCardCount">0</span>)</button>
+                    <button type="button" class="btn btn-primary btn-sm" id="printAllCards" disabled>Cetak Semua QR Siap (<span id="allReadyCount">0</span>)</button>
                 </div>
                 <div class="table-responsive"><table id="tableMasterBarangZahir" class="table table-bordered table-striped table-hover w-100">
-                    <thead><tr><th>Kode Barang</th><th>Nama Barang</th><th>Expired Date</th><th>P</th><th>L</th><th>T</th><th>Dimensi</th><th>QR Code</th><th>Status QR</th></tr></thead><tbody></tbody>
+                    <thead><tr><th><input type="checkbox" id="selectPageCards" title="Centang semua QR siap di halaman ini" aria-label="Centang semua QR siap di halaman ini"></th><th>Kode Barang</th><th>Nama Barang</th><th>Expired Date</th><th>P</th><th>L</th><th>T</th><th>Dimensi</th><th>QR Code</th><th>Status QR</th></tr></thead><tbody></tbody>
                 </table></div>
             </div>
         </div></div><div class="col-lg-4 mb-3"><div class="card h-100" style="position:sticky;top:12px">
@@ -51,8 +53,8 @@
     #tableMasterBarangZahir tbody tr{cursor:pointer}#tableMasterBarangZahir tbody tr.selected{background:#e8f4ff}
     .stock-card-preview{width:100%;max-width:96mm;margin:0 auto;border:1px solid #111827;background:#fff;color:#111827;text-align:center}
     .stock-card-preview .stock-card-name{padding:18px 10px 8px;font-size:17px;font-weight:700;word-break:break-word}
-    .stock-card-preview .stock-card-qr{height:180px;display:flex;align-items:center;justify-content:center}
-    .stock-card-preview .stock-card-qr img{width:160px;height:160px;object-fit:contain}
+    .stock-card-preview .stock-card-qr{height:340px;display:flex;align-items:center;justify-content:center;margin-bottom:24px}
+    .stock-card-preview .stock-card-qr img{width:320px;height:320px;object-fit:contain}
     .stock-card-preview .stock-card-foot{border-top:1px solid #111827;padding:12px;font-size:14px;font-weight:700}
     @media print{body *{visibility:hidden!important}#previewStockCard,#previewStockCard *{visibility:visible!important}#previewStockCard{position:absolute;left:0;top:0;width:96mm;max-width:none}}
 </style>
@@ -61,7 +63,10 @@ window.addEventListener('load', function () {
     var refreshBusy = false;
     var autoRefreshAttempted = false;
     var selectedRow = null;
+    var selectedCards = {};
+    var readyCount = 0;
     var listUrl = '<?= base_url('admin/stockopname/master_barang/list') ?>';
+    var printUrl = '<?= base_url('admin/stockopname/master_barang/print-kartu-stock') ?>';
     function alertMessage(icon, message) {
         if (typeof Swal !== 'undefined') { Swal.fire({icon: icon, text: message}); }
         else { window.alert(message); }
@@ -69,13 +74,38 @@ window.addEventListener('load', function () {
     function esc(value) { return $('<div>').text(value === null || value === undefined ? '' : String(value)).html(); }
     function displayNumber(value) { return value === null || value === undefined ? '-' : esc(value); }
     function formatDate(value) { var p = String(value || '').split('-'); return p.length === 3 ? p[2] + '/' + p[1] + '/' + p[0] : (value || '-'); }
+    function cardValues(row) { return [row.kode_barang, row.nama_barang, row.expired_date]; }
+    function cardKey(row) { return JSON.stringify(cardValues(row)); }
+    function updateSelectionUi(api) {
+        api = api || table;
+        var count = Object.keys(selectedCards).length;
+        $('#selectedCardCount').text(count);
+        $('#printSelectedCards,#printStockCardWidget').prop('disabled', count === 0);
+        $('#allReadyCount').text(readyCount);
+        $('#printAllCards').prop('disabled', readyCount === 0);
+        var current = api.rows({page: 'current'}).data().toArray().filter(function (row) { return !!row.qrcode_url; });
+        var checked = current.filter(function (row) { return !!selectedCards[cardKey(row)]; }).length;
+        $('#selectPageCards').prop('checked', current.length > 0 && checked === current.length)
+            .prop('indeterminate', checked > 0 && checked < current.length)
+            .prop('disabled', current.length === 0);
+    }
+    function submitPrint(mode, values) {
+        var form = $('<form>', {method: 'POST', action: printUrl, target: '_blank'});
+        form.append($('<input>', {type: 'hidden', name: 'mode', value: mode}));
+        if (mode === 'selected') {
+            form.append($('<input>', {type: 'hidden', name: 'selected_items', value: JSON.stringify(values)}));
+        }
+        $('body').append(form);
+        form.trigger('submit');
+        form.remove();
+    }
     function renderPreview(row) {
         selectedRow = row;
         var qr = row.qrcode_url ? '<img src="' + esc(row.qrcode_url) + '" alt="QR barang">' : '<span class="text-muted">QR Code belum digenerate</span>';
         $('#previewStockCard').html('<div class="stock-card-name">' + esc(row.nama_barang) + '</div>' +
             '<div class="stock-card-qr">' + qr + '</div>' +
             '<div class="stock-card-foot">EXPIRED DATE : ' + esc(formatDate(row.expired_date)) + '</div>');
-        $('#printStockCard,#printStockCardWidget').prop('disabled', !row.qrcode_url);
+        $('#printStockCard').prop('disabled', !row.qrcode_url);
     }
     $.fn.dataTable.ext.errMode = 'none';
     var table = $('#tableMasterBarangZahir').DataTable({
@@ -94,6 +124,9 @@ window.addEventListener('load', function () {
                     $('#catalogQtyZero').text(Number(response.widgets.qty_zero || 0).toLocaleString('id-ID'));
                     $('#catalogQrDone').text(Number(response.widgets.generated || 0).toLocaleString('id-ID'));
                     $('#catalogQrPending').text(Number(response.widgets.pending || 0).toLocaleString('id-ID'));
+                    readyCount = Number(response.widgets.generated || 0);
+                    $('#allReadyCount').text(readyCount);
+                    $('#printAllCards').prop('disabled', readyCount === 0);
                 }
                 if (response.stale && !autoRefreshAttempted && !refreshBusy) {
                     autoRefreshAttempted = true;
@@ -107,6 +140,12 @@ window.addEventListener('load', function () {
             }
         },
         columns: [
+            {data: null, orderable: false, searchable: false, render: function (value, type, row) {
+                if (type !== 'display') { return ''; }
+                var key = cardKey(row);
+                return '<input type="checkbox" class="select-stock-card" aria-label="Pilih kartu ' + esc(row.kode_barang) + '" data-key="' + esc(key) + '"' +
+                    (selectedCards[key] ? ' checked' : '') + (row.qrcode_url ? '' : ' disabled title="Generate QR dahulu"') + '>';
+            }},
             {data: 'kode_barang', render: $.fn.dataTable.render.text()},
             {data: 'nama_barang', render: $.fn.dataTable.render.text()},
             {data: 'expired_date', render: function (value, type) {
@@ -138,6 +177,7 @@ window.addEventListener('load', function () {
                 if (active) { matched = true; renderPreview(row); }
             });
             if (!matched) { selectedRow = null; $('#previewStockCard').html('<div class="text-muted text-center p-4">Pilih barang dari tabel.</div>'); $('#printStockCard,#printStockCardWidget').prop('disabled', true); }
+            updateSelectionUi(this.api());
         },
         language: {
             search: 'Cari:', lengthMenu: 'Tampilkan _MENU_ data',
@@ -159,9 +199,29 @@ window.addEventListener('load', function () {
         table.ajax.reload();
     });
     $('#tableMasterBarangZahir tbody').on('click', 'tr', function (event) {
-        if ($(event.target).closest('a,button').length) { return; }
+        if ($(event.target).closest('a,button,input').length) { return; }
         var row = table.row(this).data();
         if (row) { renderPreview(row); table.rows({page:'current'}).nodes().to$().removeClass('selected'); $(this).addClass('selected'); }
+    });
+    $('#tableMasterBarangZahir tbody').on('change', '.select-stock-card', function () {
+        var row = table.row($(this).closest('tr')).data();
+        if (!row || !row.qrcode_url) { return; }
+        var key = cardKey(row);
+        if (this.checked) { selectedCards[key] = cardValues(row); }
+        else { delete selectedCards[key]; }
+        updateSelectionUi();
+    });
+    $('#selectPageCards').on('change', function () {
+        var checked = this.checked;
+        table.rows({page: 'current'}).every(function () {
+            var row = this.data();
+            if (!row.qrcode_url) { return; }
+            var key = cardKey(row);
+            if (checked) { selectedCards[key] = cardValues(row); }
+            else { delete selectedCards[key]; }
+            $(this.node()).find('.select-stock-card').prop('checked', checked);
+        });
+        updateSelectionUi();
     });
     $('#tableMasterBarangZahir tbody').on('click', '.generate-catalog-qr', function () {
         var button = $(this), id = button.attr('data-id'), code = button.attr('data-code');
@@ -176,8 +236,12 @@ window.addEventListener('load', function () {
             .fail(function (xhr) { alertMessage('error', (xhr.responseJSON && xhr.responseJSON.message) || 'Server gagal generate QR Code.'); })
             .always(function () { button.prop('disabled', false).text('Generate QR'); });
     });
-    $('#printStockCard').on('click', function () { if (selectedRow && selectedRow.qrcode_url) { window.print(); } });
-    $('#printStockCardWidget').on('click', function () { if (selectedRow && selectedRow.qrcode_url) { window.print(); } });
+    $('#printStockCard').on('click', function () { if (selectedRow && selectedRow.qrcode_url) { submitPrint('selected', [cardValues(selectedRow)]); } });
+    $('#printStockCardWidget,#printSelectedCards').on('click', function () {
+        var values = Object.keys(selectedCards).map(function (key) { return selectedCards[key]; });
+        if (values.length) { submitPrint('selected', values); }
+    });
+    $('#printAllCards').on('click', function () { if (readyCount > 0) { submitPrint('all'); } });
     function refreshCatalog(showAlert) {
         if (refreshBusy) { return; }
         refreshBusy = true;
