@@ -67,6 +67,9 @@
         </section>
 
         <section class="content">
+            <?php if (!empty($pending_summary['unmatched_count'])): ?>
+            <div class="alert alert-warning mx-3"><?= (int)$pending_summary['unmatched_count'] ?> baris pending belum cocok kode barang, lot, dan expired. Lengkapi pemetaan di Barang Pending agar masuk stok pembanding.</div>
+            <?php endif; ?>
             <div class="container-fluid">
                 <style>
                     .opname-monitoring{background:#f5f7fb}
@@ -237,7 +240,6 @@
                                     <form id="monitoringPendingModeForm" class="input-group input-group-sm mt-2">
                                         <select id="monitoringPendingMode" name="mode" class="form-control">
                                             <option value="add" <?= $pending_mode === 'add' ? 'selected' : '' ?>>Qty dasar + pending</option>
-                                            <option value="subtract" <?= $pending_mode === 'subtract' ? 'selected' : '' ?>>Qty dasar - pending</option>
                                         </select>
                                         <div class="input-group-append">
                                             <button class="btn btn-outline-primary" type="submit"><i class="fas fa-save"></i></button>
@@ -576,9 +578,9 @@ $(function () {
         columns: [
             {data: 'nama_barang'},
             {data: 'qty_buku', className: 'text-right font-weight-bold', render: function (data) { return numberId(data); }},
-            {data: 'qty_tim_1', className: 'text-right font-weight-bold', render: function (data) { return numberId(data); }},
-            {data: 'qty_tim_2', className: 'text-right font-weight-bold', render: function (data) { return numberId(data); }},
-            {data: 'status_opname', orderable: false, render: statusBadge},
+            {data: 'qty_tim_1', className: 'text-right font-weight-bold', render: function (data, type, row) { return renderTeamQty(row, 1); }},
+            {data: 'qty_tim_2', className: 'text-right font-weight-bold', render: function (data, type, row) { return renderTeamQty(row, 2); }},
+            {data: 'status_opname', orderable: false, render: function (value, type, row) { return statusBadge(value) + '<br><small>' + escapeHtml((row.kelengkapan_tim || '').replace(/_/g, ' ')) + (row.total_lot ? ' (T1 ' + numberId(row.lot_tim_1) + '/' + numberId(row.total_lot) + ', T2 ' + numberId(row.lot_tim_2) + '/' + numberId(row.total_lot) + ')' : '') + ' / ' + escapeHtml((row.perbandingan_tim || '').replace(/_/g, ' ')) + '</small>'; }},
             {data: 'kode_barang', className: 'text-center', orderable: false, searchable: false, render: detailInputButton}
         ]
     });
@@ -597,11 +599,11 @@ $(function () {
         },
         columns: [
             {data: 'nama_barang'},
-            {data: 'expired_date', defaultContent: '-', render: function (value) { return formatExpiredDate(value); }},
+            {data: 'expired_date', defaultContent: '-', render: function (value, type, row) { return escapeHtml(row.no_lot || '-') + ' / ' + formatExpiredDate(value); }},
             {data: 'qty_buku', className: 'text-right font-weight-bold', render: function (data) { return numberId(data); }},
-            {data: 'qty_tim_1', className: 'text-right font-weight-bold', render: function (data) { return numberId(data); }},
-            {data: 'qty_tim_2', className: 'text-right font-weight-bold', render: function (data) { return numberId(data); }},
-            {data: 'status_opname', orderable: false, render: statusBadge},
+            {data: 'qty_tim_1', className: 'text-right font-weight-bold', render: function (data, type, row) { return renderTeamQty(row, 1); }},
+            {data: 'qty_tim_2', className: 'text-right font-weight-bold', render: function (data, type, row) { return renderTeamQty(row, 2); }},
+            {data: 'status_opname', orderable: false, render: function (value, type, row) { return statusBadge(value) + '<br><small>' + escapeHtml((row.kelengkapan_tim || '').replace(/_/g, ' ')) + (row.total_lot ? ' (T1 ' + numberId(row.lot_tim_1) + '/' + numberId(row.total_lot) + ', T2 ' + numberId(row.lot_tim_2) + '/' + numberId(row.total_lot) + ')' : '') + ' / ' + escapeHtml((row.perbandingan_tim || '').replace(/_/g, ' ')) + '</small>'; }},
             {data: 'kode_barang', orderable: false, render: codeBadge}
         ]
     });

@@ -118,6 +118,8 @@ $route['admin/stockopname/master_opname/item-search'] = 'admin/C_Stockopname/aja
 $route['admin/stockopname/master_opname/create']   = 'admin/C_Stockopname/ajax_create_master_barang';
 $route['admin/stockopname/master_barang']          = 'admin/C_Stockopname/master_barang_catalog';
 $route['admin/stockopname/master_barang/list']     = 'admin/C_Stockopname/ajax_master_barang_catalog_list';
+$route['admin/stockopname/master_barang/generate-qrcode'] = 'admin/C_Stockopname/ajax_generate_catalog_qrcode';
+$route['admin/stockopname/master_barang/print-kartu-stock'] = 'admin/C_Stockopname/print_catalog_stock_cards';
 $route['admin/stockopname/master_barang/create']   = 'admin/C_Stockopname/ajax_create_master_barang_catalog';
 $route['admin/stockopname/master_barang/update']   = 'admin/C_Stockopname/ajax_update_master_barang_catalog';
 $route['admin/stockopname/barang-pending']         = 'admin/C_Stockopname/barang_pending';
@@ -579,3 +581,5 @@ $route['hrd/penilaian_lingkungan/locations/delete'] = 'hrd/C_Hrd/delete_hrd_loca
 $route['hrd/penilaian_lingkungan/ratings']         = 'hrd/C_Hrd/get_hrd_ratings';
 $route['hrd/penilaian_lingkungan/ratings/save']    = 'hrd/C_Hrd/save_hrd_rating';
 $route['hrd/penilaian_lingkungan/ratings/delete']  = 'hrd/C_Hrd/delete_hrd_rating';
+
+$route['admin/stockopname/master_barang/qrcode/(:num)'] = 'admin/C_Stockopname/catalog_qrcode/$1';

@@ -28,6 +28,9 @@ foreach ($pendingMasterOptions as $option) {
             </div>
         </section>
         <section class="content">
+            <?php if (!empty($summary['unmatched_count'])): ?>
+            <div class="alert alert-warning mx-3"><?= (int)$summary['unmatched_count'] ?> baris pending belum cocok kode barang, lot, dan expired. Lengkapi pemetaan di Barang Pending agar masuk stok pembanding.</div>
+            <?php endif; ?>
             <div class="container-fluid">
                 <style>
                     .pending-panel{background:#fff;border:1px solid #e2e8f0;border-radius:8px;box-shadow:0 8px 22px rgba(16,24,40,.06)}
@@ -50,7 +53,7 @@ foreach ($pendingMasterOptions as $option) {
                             <div class="card-header"><i class="fas fa-box-open mr-1"></i> Input Barang Pending</div>
                             <form id="formBarangPending" class="card-body">
                                 <input type="hidden" name="id" id="pendingId">
-                                <input type="hidden" name="no_lot" id="noLot">
+                                <input type="hidden" name="no_lot" id="noLot"><input type="hidden" name="expired_date" id="pendingExpiredValue">
                                 <div class="form-group">
                                     <label>Kode faktur</label>
                                     <input name="kd_do" id="kdDo" class="form-control pending-code" maxlength="100" required>
@@ -71,7 +74,7 @@ foreach ($pendingMasterOptions as $option) {
                                 <div class="form-row">
                                     <div class="col-8 form-group">
                                         <label>Expired date</label>
-                                        <select name="expired_date" id="expiredDate" class="form-control" required disabled>
+                                        <select id="expiredDate" class="form-control" required disabled>
                                             <option value="">Pilih kode barang dulu</option>
                                         </select>
                                     </div>
@@ -188,7 +191,7 @@ window.addEventListener('load', function () {
         var kode = $('#kodeBarang').val(), expired = $('#expiredDate').val();
         var rows = masterByCode[kode] || [];
         for (var i = 0; i < rows.length; i++) {
-            if (String(rows[i].expired_date || '') === String(expired || '')) { return rows[i]; }
+            if (String(rows[i].id) === String(expired || '')) { return rows[i]; }
         }
         return null;
     }
@@ -200,8 +203,7 @@ window.addEventListener('load', function () {
     function setMasterFields() {
         var row = selectedMasterRow();
         if (!row) {
-            var rows = masterByCode[$('#kodeBarang').val()] || [];
-            row = rows.length ? rows[0] : null;
+            $('#pendingExpiredValue').val('');
         }
         if (!row) {
             $('#namaBarang').val('');
@@ -212,24 +214,23 @@ window.addEventListener('load', function () {
         }
         $('#namaBarang').val(row.nama_barang || '');
         $('#noLot').val(row.no_lot || '-');
+        $('#pendingExpiredValue').val(row.expired_date || '');
         $('#dimensi').val(toInt(row.dimensi));
         recalcQty();
         return row;
     }
-    function populateExpiredOptions(kode, selected) {
+    function populateExpiredOptions(kode, selected, lot) {
         var rows = masterByCode[kode] || [];
         var html = rows.length ? '<option value="">Pilih expired date</option>' : '<option value="">Tidak ada expired date</option>';
         rows.forEach(function (row) {
             var expired = String(row.expired_date || '');
-            var label = expired + ' | Qty: ' + toInt(row.qty) + ' | Dimensi: ' + toInt(row.dimensi);
-            html += '<option value="' + esc(expired) + '">' + esc(label) + '</option>';
+            var label = (row.no_lot || '-') + ' / ' + expired + ' | Qty: ' + toInt(row.qty) + ' | Dimensi: ' + toInt(row.dimensi);
+            html += '<option value="' + esc(row.id) + '">' + esc(label) + '</option>';
         });
         $('#expiredDate').html(html).prop('disabled', !rows.length);
         if (selected) {
-            if (!rows.some(function (row) { return String(row.expired_date || '') === String(selected); })) {
-                $('#expiredDate').append('<option value="' + esc(selected) + '">' + esc(selected) + ' | data lama</option>');
-            }
-            $('#expiredDate').val(selected);
+            var match = rows.filter(function (row) { return row.expired_date === selected && String(row.no_lot || '-') === String(lot || '-'); })[0];
+            $('#expiredDate').val(match ? match.id : '');
         }
         setMasterFields();
     }
@@ -282,7 +283,7 @@ window.addEventListener('load', function () {
         refreshKodeBarangSelect2();
         $('#qtyPcs').val(row.qty_pcs);
         $('#qtyBox').val(row.qty_box);
-        populateExpiredOptions(row.kode_barang, row.expired_date);
+        populateExpiredOptions(row.kode_barang, row.expired_date, row.no_lot);
         if (!selectedMasterRow()) {
             $('#namaBarang').val(row.nama_barang);
             $('#noLot').val(row.no_lot);
@@ -318,11 +319,11 @@ window.addEventListener('load', function () {
             if (!rows.length) { $('#barangPendingRows').html('<tr><td colspan="8" class="text-center text-muted p-4">Belum ada data pending.</td></tr>'); return; }
             $('#barangPendingRows').html(rows.map(function (row) {
                 pendingRows[row.id] = row;
-                var badge = parseInt(row.master_id || 0, 10) > 0 ? '<span class="badge badge-success">Masuk master</span>' : '<span class="badge badge-warning">Belum ada master</span>';
+                var badge = parseInt(row.master_id || 0, 10) > 0 ? '<span class="badge badge-success">Masuk pembanding</span>' : '<span class="badge badge-warning">Perlu pemetaan admin</span>';
                 return '<tr>' +
                     '<td class="pending-code">' + esc(row.kode_barang) + '</td>' +
                     '<td>' + esc(row.nama_barang) + '</td>' +
-                    '<td>' + esc(formatDate(row.expired_date)) + '</td>' +
+                    '<td>' + esc(row.no_lot || '-') + ' / ' + esc(formatDate(row.expired_date)) + '</td>' +
                     '<td class="text-right">' + esc(row.qty) + '</td>' +
                     '<td class="text-right">' + esc(row.qty_box) + '</td>' +
                     '<td class="text-right">' + esc(row.qty_pcs) + '</td>' +

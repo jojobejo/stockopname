@@ -6,6 +6,13 @@ class Karisma_code_generator
     public function qrcode($value, $targetFile)
     {
         $this->ensureDirectory(dirname($targetFile));
+        if (function_exists('imagecreatetruecolor') && is_file(APPPATH . 'libraries/stockopnameqr/qrcode.php')) {
+            require_once APPPATH . 'libraries/stockopnameqr/qrcode.php';
+            $qr = \StockopnameQr\QRCode::getMinimumQRCode($value, \StockopnameQr\QR_ERROR_CORRECT_LEVEL_M);
+            $image = $qr->createImage(8, 4);
+            try { return imagepng($image, $targetFile); }
+            finally { imagedestroy($image); }
+        }
 
         if (!class_exists('QRcode')) {
             $phpQr = APPPATH . 'libraries/phpqrcode/qrlib.php';

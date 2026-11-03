@@ -35,12 +35,12 @@
     $selisih_tim_2 = $qty_tim_2 - $qty_buku;
     $status = $compare['status_opname'] ?? 're_check';
     $status_label = ['all_match' => 'All Match', 'tim_1' => 'Tim 1 Match', 'tim_2' => 'Tim 2 Match', 're_check' => 'Re-Check'][$status] ?? 'Re-Check';
-    $expired_key = function ($expired) { return trim((string)$expired); };
+    $expired_key = function ($expired, $lot = '-') { return trim((string)$expired) . '|' . (trim((string)$lot) ?: '-'); };
     $pending_key = function ($nama_barang, $expired) { return trim((string)$nama_barang) . '|' . trim((string)$expired); };
     $stock_by_expired = [];
     $stock_tab_counts = ['main' => 0, 'zero' => 0, 'all' => 0];
     foreach ($master_items as $row) {
-        $key = $expired_key($row['expired_date'] ?? '');
+        $key = $expired_key($row['expired_date'] ?? '', $row['no_lot'] ?? '-');
         $row_book_qty = (int)($row['qty_buku'] ?? $row['qty'] ?? 0);
         $has_master_stock = (int)($row['master_id'] ?? $row['id'] ?? 0) > 0;
         $stock_by_expired[$key] = ($stock_by_expired[$key] ?? 0) + $row_book_qty;
@@ -110,7 +110,7 @@
                                         <thead><tr><th>Expired Date</th><th>Qty Buku</th><th>Pending</th><th>Tim 1</th><th>Tim 2</th><th>Status</th><th>Pilih</th><th>Hapus</th></tr></thead>
                                         <tbody><?php foreach ($master_items as $row) :
                                             $book_qty = (int)($row['qty_buku'] ?? $row['qty'] ?? 0);
-                                            $pending_row = $pending_totals[$pending_key($row['nama_barang'] ?? $nama_barang, $row['expired_date'] ?? '')] ?? ['qty' => 0];
+                                            $pending_row = $pending_totals[$expired_key($row['expired_date'] ?? '', $row['no_lot'] ?? '-')] ?? ['qty' => 0];
                                             $pending_qty = (int)($pending_row['qty'] ?? 0);
                                             $team_1_qty = (int)($row['qty_tim_1'] ?? 0);
                                             $team_2_qty = (int)($row['qty_tim_2'] ?? 0);
@@ -126,9 +126,9 @@
                                             elseif ($team_1_ok) { $lot_status = 'Tim 1'; $lot_status_class = 'partial'; }
                                             elseif ($team_2_ok) { $lot_status = 'Tim 2'; $lot_status_class = 'partial'; }
                                             else { $lot_status = 'Not Match'; $lot_status_class = 'diff'; }
-                                            $filter_key = $expired_key($row['expired_date'] ?? '');
+                                            $filter_key = $expired_key($row['expired_date'] ?? '', $row['no_lot'] ?? '-');
                                         ?>
-                                            <tr class="js-stock-book-row" data-stock-tab="<?= $e($stock_tab) ?>"><td><?= $e($format_expired_date($row['expired_date'] ?? '')) ?></td><td class="text-right"><?= number_format($book_qty, 0, ',', '.') ?></td><td class="text-right"><?= number_format($pending_qty, 0, ',', '.') ?></td><td class="text-right"><?= number_format($team_1_qty, 0, ',', '.') ?></td><td class="text-right"><?= number_format($team_2_qty, 0, ',', '.') ?></td><td class="text-center"><span class="so-lot-status <?= $lot_status_class ?>"><?= $lot_status ?></span></td><td class="text-center"><input type="checkbox" class="js-lot-filter" data-key="<?= $e($filter_key) ?>" title="Tampilkan hasil input expired date ini"></td><td class="text-center"><button type="button" class="btn btn-outline-danger btn-sm so-action-btn js-delete-master-item" data-expired="<?= $e($row['expired_date'] ?? '') ?>" title="Hapus stock buku"><i class="fas fa-trash"></i></button></td></tr>
+                                            <tr class="js-stock-book-row" data-stock-tab="<?= $e($stock_tab) ?>"><td><?= $e($row['no_lot'] ?? '-') ?> / <?= $e($format_expired_date($row['expired_date'] ?? '')) ?></td><td class="text-right"><?= number_format($book_qty, 0, ',', '.') ?></td><td class="text-right"><?= number_format($pending_qty, 0, ',', '.') ?></td><td class="text-right"><?= number_format($team_1_qty, 0, ',', '.') ?></td><td class="text-right"><?= number_format($team_2_qty, 0, ',', '.') ?></td><td class="text-center"><span class="so-lot-status <?= $lot_status_class ?>"><?= $lot_status ?></span></td><td class="text-center"><input type="checkbox" class="js-lot-filter" data-key="<?= $e($filter_key) ?>" title="Tampilkan hasil input expired date ini"></td><td class="text-center"><button type="button" class="btn btn-outline-danger btn-sm so-action-btn js-delete-master-item" data-lot="<?= $e($row['no_lot'] ?? '-') ?>" data-expired="<?= $e($row['expired_date'] ?? '') ?>" title="Hapus stock buku"><i class="fas fa-trash"></i></button></td></tr>
                                         <?php endforeach ?></tbody>
                                     </table><?php endif ?>
                                     <div class="so-empty so-filter-empty" id="stockBookFilterEmpty">Data tidak ditemukan untuk tab ini.</div>
@@ -143,7 +143,7 @@
                                         <thead><tr><th>Expired Date</th><th>Qty</th><th>Qty PCS</th><th>Qty Box</th><th>Input By</th><th>Input Source</th><th>#</th></tr></thead>
                                         <tbody><?php foreach ($request_rows as $index => $row) : ?>
                                             <?php $request_json = htmlspecialchars(json_encode($row, JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8'); ?>
-                                            <tr class="js-request-row" data-index="<?= $index ?>"><td><?= $e($format_expired_date($row['expired_date'] ?? '')) ?></td><td class="text-right"><?= number_format((int)$row['qty'], 0, ',', '.') ?></td><td class="text-right"><?= number_format((int)$row['qty_pcs'], 0, ',', '.') ?></td><td class="text-right"><?= number_format((int)$row['qty_box'], 0, ',', '.') ?></td><td><?= $e($row['input_by']) ?></td><td><?= $e($source_label($row['input_source'] ?? 'manual')) ?></td><td class="text-center"><div class="d-flex justify-content-center" style="gap:5px"><button type="button" class="btn btn-outline-success btn-sm so-action-btn js-add-request" data-row="<?= $request_json ?>" title="Tambah ke hasil opname"><i class="fas fa-plus"></i></button><button type="button" class="btn btn-outline-danger btn-sm so-action-btn js-delete-request" data-row="<?= $request_json ?>" title="Hapus request item"><i class="fas fa-trash"></i></button></div></td></tr>
+                                            <tr class="js-request-row" data-index="<?= $index ?>"><td><?= $e($row['no_lot'] ?? '-') ?> / <?= $e($format_expired_date($row['expired_date'] ?? '')) ?></td><td class="text-right"><?= number_format((int)$row['qty'], 0, ',', '.') ?></td><td class="text-right"><?= number_format((int)$row['qty_pcs'], 0, ',', '.') ?></td><td class="text-right"><?= number_format((int)$row['qty_box'], 0, ',', '.') ?></td><td><?= $e($row['input_by']) ?></td><td><?= $e($source_label($row['input_source'] ?? 'manual')) ?></td><td class="text-center"><div class="d-flex justify-content-center" style="gap:5px"><button type="button" class="btn btn-outline-success btn-sm so-action-btn js-add-request" data-row="<?= $request_json ?>" title="Tambah ke hasil opname"><i class="fas fa-plus"></i></button><button type="button" class="btn btn-outline-danger btn-sm so-action-btn js-delete-request" data-row="<?= $request_json ?>" title="Hapus request item"><i class="fas fa-trash"></i></button></div></td></tr>
                                         <?php endforeach ?></tbody>
                                     </table>
                                     <div class="p-2 text-center js-request-pagination"></div>
@@ -164,11 +164,11 @@
                                     <thead><tr><th>Input</th><th>Expired Date</th><th>Qty Buku</th><th>Qty</th><th>Qty Box</th><th>Qty PCS</th><th>#</th></tr></thead>
                                     <tbody><?php foreach ($input_rows as $row) :
                                         $row_json = htmlspecialchars(json_encode($row, JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8');
-                                        $book = $stock_by_expired[$expired_key($row['expired_date'] ?? '')] ?? 0;
+                                        $book = $stock_by_expired[$expired_key($row['expired_date'] ?? '', $row['no_lot'] ?? '-')] ?? 0;
                                     ?>
-                                        <tr class="so-input-row js-select-opname" data-row="<?= $row_json ?>" data-team="<?= (int)($row['tim_opname'] ?? 0) ?>" data-key="<?= $e($expired_key($row['expired_date'] ?? '')) ?>">
+                                        <tr class="so-input-row js-select-opname" data-row="<?= $row_json ?>" data-team="<?= (int)($row['tim_opname'] ?? 0) ?>" data-key="<?= $e($expired_key($row['expired_date'] ?? '', $row['no_lot'] ?? '-')) ?>">
                                             <td><div class="so-cell-main"><?= $e($row['input_by'] ?? '-') ?></div><div class="so-cell-sub">Tim <?= $e($row['tim_opname'] ?? '-') ?> | <?= $e($row['created_at'] ?? $row['input_at'] ?? '-') ?></div></td>
-                                            <td><div class="so-cell-main"><?= $e($format_expired_date($row['expired_date'] ?? '')) ?></div></td>
+                                            <td><div class="so-cell-main"><?= $e($row['no_lot'] ?? '-') ?> / <?= $e($format_expired_date($row['expired_date'] ?? '')) ?></div></td>
                                             <td class="text-right"><?= number_format($book, 0, ',', '.') ?></td><td class="text-right font-weight-bold"><?= number_format((int)$row['qty'], 0, ',', '.') ?></td><td class="text-right"><?= number_format((int)$row['qty_box'], 0, ',', '.') ?></td><td class="text-right"><?= number_format((int)$row['qty_pcs'], 0, ',', '.') ?></td>
                                             <td class="text-center"><div class="d-flex justify-content-center" style="gap:5px"><button type="button" class="btn btn-outline-primary btn-sm so-action-btn js-edit-opname" title="Edit Qty"><i class="fas fa-edit"></i></button><button type="button" class="btn btn-outline-danger btn-sm so-action-btn js-delete-opname" title="Delete"><i class="fas fa-trash"></i></button></div></td>
                                         </tr>
@@ -186,7 +186,7 @@
                                 <table class="table table-bordered table-hover so-table">
                                     <thead><tr><th>Input</th><th>Expired Date</th><th>Qty</th><th>Qty Box</th><th>Qty PCS</th><th>#</th></tr></thead>
                                     <tbody><?php foreach ($recycle_rows as $row) : ?>
-                                        <tr><td><div class="so-cell-main"><?= $e($row['input_by']) ?></div><div class="so-cell-sub">Dihapus <?= $e($row['deleted_by']) ?> | <?= $e($row['deleted_at']) ?></div></td><td><div class="so-cell-main"><?= $e($format_expired_date($row['expired_date'] ?? '')) ?></div></td><td class="text-right"><?= number_format((int)$row['qty'], 0, ',', '.') ?></td><td class="text-right"><?= number_format((int)$row['qty_box'], 0, ',', '.') ?></td><td class="text-right"><?= number_format((int)$row['qty_pcs'], 0, ',', '.') ?></td><td class="text-center"><button type="button" class="btn btn-outline-success btn-sm so-action-btn js-repost-opname" data-id="<?= (int)$row['id'] ?>" title="Repost"><i class="fas fa-undo"></i></button></td></tr>
+                                        <tr><td><div class="so-cell-main"><?= $e($row['input_by']) ?></div><div class="so-cell-sub">Dihapus <?= $e($row['deleted_by']) ?> | <?= $e($row['deleted_at']) ?></div></td><td><div class="so-cell-main"><?= $e($row['no_lot'] ?? '-') ?> / <?= $e($format_expired_date($row['expired_date'] ?? '')) ?></div></td><td class="text-right"><?= number_format((int)$row['qty'], 0, ',', '.') ?></td><td class="text-right"><?= number_format((int)$row['qty_box'], 0, ',', '.') ?></td><td class="text-right"><?= number_format((int)$row['qty_pcs'], 0, ',', '.') ?></td><td class="text-center"><button type="button" class="btn btn-outline-success btn-sm so-action-btn js-repost-opname" data-id="<?= (int)$row['id'] ?>" title="Repost"><i class="fas fa-undo"></i></button></td></tr>
                                     <?php endforeach ?></tbody>
                                 </table><?php endif ?>
                             </div>
@@ -240,7 +240,7 @@
                     <div class="alert alert-danger d-none" id="addRequestAlert"></div>
                     <input type="hidden" name="manual_master_id" id="request_manual_master_id">
                     <input type="hidden" name="kode_barang" id="request_kode_barang">
-                    <input type="hidden" name="expired_date" id="request_expired_date">
+                    <input type="hidden" name="expired_date" id="request_expired_date"><input type="hidden" name="no_lot" id="request_no_lot">
                     <div class="so-modal-context"><strong id="request_nama_barang">-</strong><div class="so-muted"><span id="request_expired_text">-</span> | Dimensi <span id="request_dimensi_text">0</span></div></div>
                     <div class="row">
                         <div class="col-md-3"><div class="so-field-card is-locked mb-3"><label>Tim Opname</label><input type="hidden" name="tim_opname" id="request_tim_opname_value"><select class="form-control so-control-locked" id="request_tim_opname" disabled><option value="1">Tim 1</option><option value="2">Tim 2</option></select></div></div>
@@ -411,7 +411,7 @@ $(function () {
         $('#modalEditOpname').modal('show');
     }
     function formatLotOption(row) {
-        return formatExpiredDate(row.expired_date) + ' | Dimensi ' + (parseInt(row.dimensi || 0, 10) || 0);
+        return (row.no_lot || '-') + ' / ' + formatExpiredDate(row.expired_date) + ' | Dimensi ' + (parseInt(row.dimensi || 0, 10) || 0);
     }
     function selectedInputMaster() {
         var id = String($('#input_master_id').val() || '');
@@ -491,8 +491,9 @@ $(function () {
     });
     $(document).on('click', '.js-delete-master-item', function () {
         var expired = $(this).attr('data-expired') || '';
-        if (!window.confirm('Hapus stock buku expired ' + formatExpiredDate(expired) + ' beserta data opname terkait?')) return;
-        $.post(urls.deleteMasterItem, {kode_barang: pageKodeBarang, expired_date: expired}, null, 'json').done(function (res) {
+        var lot = $(this).attr('data-lot') || '-';
+        if (!window.confirm('Hapus stock buku lot ' + lot + ' expired ' + formatExpiredDate(expired) + ' beserta data opname terkait?')) return;
+        $.post(urls.deleteMasterItem, {kode_barang: pageKodeBarang, expired_date: expired, no_lot: lot}, null, 'json').done(function (res) {
             if (!res || !res.status) { toast((res && res.message) || 'Hapus stock buku gagal.', false); return; }
             refreshWidgets(res.message || 'Data stock buku berhasil dihapus.');
         }).fail(function () { toast('Terjadi gangguan saat hapus stock buku.', false); });
@@ -543,7 +544,7 @@ $(function () {
         event.preventDefault();
         var button = $('#btnSaveInputOpname').prop('disabled', true), alertBox = $('#inputOpnameAlert').addClass('d-none');
         var row = selectedInputMaster();
-        var filterKey = row ? (row.expired_date || '') : '';
+        var filterKey = row ? ((row.expired_date || '') + '|' + (row.no_lot || '-')) : '';
         activeTeam = parseInt($('#input_tim_opname').val(), 10) || activeTeam;
         $.post(urls.addInput, $(this).serialize(), null, 'json').done(function (res) {
             if (!res || !res.status) { alertBox.removeClass('d-none').text((res && res.message) || 'Gagal menyimpan input opname.'); return; }
@@ -577,6 +578,7 @@ $(function () {
         $('#request_manual_master_id').val(row.manual_master_id || row.id || '');
         $('#request_kode_barang').val(row.kode_barang || pageKodeBarang);
         $('#request_expired_date').val(row.expired_date || '');
+        $('#request_no_lot').val(row.no_lot || '-');
         $('#request_nama_barang').text(row.nama_barang || pageKodeBarang);
         $('#request_expired_text').text(formatExpiredDate(row.expired_date)); $('#request_dimensi_text').text(requestDimensi);
         $('#request_tim_opname,#request_tim_opname_value').val(String(requestTeam));
@@ -594,6 +596,7 @@ $(function () {
             manual_master_id: row.manual_master_id || row.id || '',
             kode_barang: row.kode_barang || pageKodeBarang,
             expired_date: row.expired_date || '',
+            no_lot: row.no_lot || '-',
         }, null, 'json').done(function (res) {
             if (!res || !res.status) { toast((res && res.message) || 'Hapus request item gagal.', false); return; }
             refreshWidgets(res.message || 'Request item berhasil dihapus.');
@@ -606,7 +609,7 @@ $(function () {
     $(document).on('submit', '#formAddRequest', function (event) {
         event.preventDefault();
         var button = $('#btnSaveRequest').prop('disabled', true), alertBox = $('#addRequestAlert').addClass('d-none');
-        var filterKey = $('#request_expired_date').val();
+        var filterKey = $('#request_expired_date').val() + '|' + $('#request_no_lot').val();
         activeTeam = parseInt($('#request_tim_opname_value').val(), 10) || 1;
         $.post(urls.addRequest, $(this).serialize(), null, 'json').done(function (res) {
             if (!res || !res.status) { alertBox.removeClass('d-none').text((res && res.message) || 'Gagal menambahkan request item.'); return; }

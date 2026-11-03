@@ -50,7 +50,7 @@ $qtyZeroCount = (int)($qty_zero_count ?? 0);
             </div>
         </section>
 
-        <section class="content">
+        <section class="content"><div class="alert alert-info mx-3">QR kini menggunakan identitas barang. <a href="<?= base_url('admin/stockopname/master_barang') ?>">Buka Master Barang untuk generate dan cetak QR.</a></div>
             <div class="container-fluid">
                 <style>
                     .master-barang-page{background:#f5f7fb}.mb-panel{background:#fff;border:1px solid #e1e7ef;border-radius:8px;box-shadow:0 8px 22px rgba(16,24,40,.06)}
@@ -201,7 +201,7 @@ $qtyZeroCount = (int)($qty_zero_count ?? 0);
                                             <th>No Lot</th>
                                             <th>Qty</th>
                                             <th>Qty Pcs</th>
-                                            <th>Qty Box</th>
+                                            <th>Qty Box</th><th>Qty Pending</th><th>Pending Box</th><th>Pending Pcs</th>
                                             <th>#</th>
                                             <?php if ($showStockCardRangePrint) : ?>
                                                 <th>Pilih</th>
@@ -283,6 +283,8 @@ window.addEventListener('load', function () {
     var selectedId = null;
     var selectedPrintIds = {};
     var currentPrintUrl = '';
+    $('#btnGenerateQrBatch').closest('.mb-panel').hide();
+    $('#btnGenerateQrBatch,#btnRetryFailedQr,#btnResetQrOpname').hide();
     var qrcodeStatus = '';
     var isQrRunning = false;
     var qrRun = {processed: 0, success: 0, failed: 0, total: 0, mode: 'normal'};
@@ -314,6 +316,9 @@ window.addEventListener('load', function () {
             {data: 'qty', render: function (value) { return formatNumber(value); }},
             {data: 'qty_pcs', render: function (value) { return formatNumber(value); }},
             {data: 'qty_box', render: function (value) { return formatNumber(value); }},
+            {data: 'pending_qty', orderable: false, render: formatNumber},
+            {data: 'pending_qty_box', orderable: false, render: formatNumber},
+            {data: 'pending_qty_pcs', orderable: false, render: formatNumber},
             {data: null, orderable: false, searchable: false, render: renderActions}
             <?php if ($showStockCardRangePrint) : ?>,
             {data: null, orderable: false, searchable: false, className: 'text-center', render: function (_, type, row) {
@@ -419,14 +424,7 @@ window.addEventListener('load', function () {
 
     function renderActions(row) {
         var html = '<div class="mb-actions">';
-        var status = String(row.qrcode_status || '').toUpperCase();
-        html += '<button type="button" class="btn btn-outline-success btn-xs mb-icon-btn btn-preview-asset" data-toggle="tooltip" title="Preview kartu stock" data-id="' + row.id + '"><i class="fas fa-qrcode"></i></button>';
-        if (status !== 'DONE') {
-            html += '<button type="button" class="btn btn-outline-primary btn-xs mb-icon-btn btn-generate-asset" data-toggle="tooltip" title="Generate QRCode" data-type="qrcode" data-regenerate="0" data-id="' + row.id + '"><i class="fas fa-sync-alt"></i></button>';
-        } else if (parseInt(row.qrcode_ready || 0, 10) !== 1) {
-            html += '<button type="button" class="btn btn-outline-warning btn-xs mb-icon-btn btn-generate-asset" data-toggle="tooltip" title="Generate ulang QRCode" data-type="qrcode" data-regenerate="1" data-id="' + row.id + '"><i class="fas fa-sync-alt"></i></button>';
-        }
-        html += '</div>';
+        html += '<a class="btn btn-outline-success btn-xs" href="<?= base_url('admin/stockopname/master_barang') ?>">QR Barang</a></div>';
         return html;
     }
 

@@ -86,7 +86,6 @@ $pageUrl = function ($page) use ($keyword) {
                             <form id="pendingModeForm" class="input-group input-group-sm" style="width:245px">
                                 <select id="pendingMode" name="mode" class="form-control">
                                     <option value="add" <?= $pending_mode === 'add' ? 'selected' : '' ?>>Qty dasar + pending</option>
-                                    <option value="subtract" <?= $pending_mode === 'subtract' ? 'selected' : '' ?>>Qty dasar - pending</option>
                                 </select>
                                 <div class="input-group-append">
                                     <button class="btn btn-outline-primary" type="submit"><i class="fas fa-save"></i></button>

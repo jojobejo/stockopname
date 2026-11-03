@@ -63,7 +63,7 @@
 
                     <form id="formInputOpname">
                         <input type="hidden" name="input_mode" id="inputMode" value="scan">
-                        <input type="hidden" name="master_id" id="masterId">
+                        <input type="hidden" name="master_id" id="masterId"><input type="hidden" name="barang_id" id="scanBarangId">
                         <input type="hidden" name="manual_source_id" id="manualSourceId">
                         <div class="so-panel mb-3">
                             <div class="so-panel-header">
@@ -77,7 +77,7 @@
                                     </div>
                                     <div class="so-readonly full">
                                         <label>Expired Date</label>
-                                        <div id="itemExpired">-</div>
+                                        <div id="itemExpired">-</div><select class="form-control" id="scanLot"><option value="">Scan barang dahulu</option></select><small>Lot belum tersedia? Gunakan Opname Request.</small>
                                     </div>
                                 </div>
                                 <div class="so-manual-form" id="manualStockView">
@@ -86,7 +86,7 @@
                                         <select class="form-control" id="manualBarang" name="manual_kode_barang"></select>
                                     </div>
                                     <div class="form-group mb-0">
-                                        <label>Expired Date</label>
+                                        <label>Nomor Lot / Expired Date</label>
                                         <select class="form-control" id="manualExpired" name="manual_expired_id" disabled>
                                             <option value="">Pilih nama barang dahulu</option>
                                         </select>
@@ -99,7 +99,7 @@
                                     </div>
                                     <div class="form-group mb-0">
                                         <label>Expired Date</label>
-                                        <input type="text" class="form-control" id="requestExpiredView" name="request_expired_date" placeholder="dd/mm/yyyy" inputmode="numeric" maxlength="10">
+                                        <input type="text" class="form-control" id="requestNoLot" name="request_no_lot" maxlength="100" placeholder="Nomor lot"><label class="mt-2">Expired Date</label><input type="text" class="form-control" id="requestExpiredView" name="request_expired_date" placeholder="dd/mm/yyyy" inputmode="numeric" maxlength="10">
                                     </div>
                                 </div>
                             </div>
@@ -122,7 +122,7 @@
                                         </div>
                                     </div>
                                     <div class="form-group so-qty-field mb-0">
-                                        <label>Qty Pcs</label>
+                                        <label>Qty Pcs Lepas</label>
                                         <div class="input-group input-group-lg">
                                             <input type="number" class="form-control" name="qty_pcs" id="qtyPcs" min="0" step="1" placeholder="0" inputmode="numeric">
                                             <div class="input-group-append">
@@ -165,6 +165,7 @@ window.addEventListener('load', function () {
     var scanning = false;
     var selectedDimensi = 0;
     var inputMode = 'scan';
+    var lookupBusy = false;
 
     function toast(icon, title) {
         if (typeof Swal !== 'undefined') {
@@ -213,19 +214,29 @@ window.addEventListener('load', function () {
     }
 
     function fillItem(row) {
-        $('#masterId').val(row.id || '');
-        $('#manualSourceId').val('');
-        $('#itemName').html(escapeHtml(row.nama_barang || '-'));
-        $('#itemExpired').text(formatExpiredDate(row.expired_date));
+        $('#masterId,#manualSourceId').val('');
+        $('#scanBarangId').val(row.barang_id || '');
+        $('#itemName').text(row.nama_barang || '-');
+        $('#itemExpired').text('Pilih nomor lot / expired');
         selectedDimensi = parseInt(row.dimensi || 0, 10) || 0;
+        var select = $('#scanLot').empty().append(new Option('Pilih nomor lot / expired', ''));
+        (row.lots || []).forEach(function (lot) {
+            select.append(new Option((lot.no_lot || '-') + ' / ' + formatExpiredDate(lot.expired_date), lot.id));
+        });
+        if (!(row.lots || []).length) toast('warning', 'Lot belum tersedia. Gunakan Opname Request.');
         updateDimensiView();
         updateQtyTotal();
-        $('#btnSaveOpname').prop('disabled', false);
+        $('#btnSaveOpname').prop('disabled', true);
     }
+    $('#scanLot').on('change', function () {
+        $('#masterId').val($(this).val() || '');
+        $('#btnSaveOpname').prop('disabled', !$(this).val());
+    });
 
     function resetAfterSave() {
         $('#formInputOpname')[0].reset();
-        $('#masterId').val('');
+        $('#masterId,#scanBarangId').val('');
+        $('#scanLot').empty().append(new Option('Scan barang dahulu', ''));
         $('#manualSourceId').val('');
         $('#itemName,#itemExpired').text('-');
         $('#manualBarang').val(null).trigger('change');
@@ -252,6 +263,12 @@ window.addEventListener('load', function () {
     }
 
     function setInputMode(mode) {
+        if (inputMode !== mode) {
+            $('#masterId,#scanBarangId,#manualSourceId').val('');
+            $('#scanLot').empty().append(new Option('Scan barang dahulu', ''));
+            $('#manualBarang,#requestBarang').val(null).trigger('change');
+            $('#requestNoLot,#requestExpiredView').val('');
+        }
         inputMode = mode === 'manual' || mode === 'request' ? mode : 'scan';
         $('#inputMode').val(inputMode);
         if (inputMode === 'manual') {
@@ -323,7 +340,7 @@ window.addEventListener('load', function () {
 
     function validateRequestReady() {
         if (inputMode !== 'request') return;
-        var ready = !!$('#requestBarang').val() && !!requestExpiredStorageValue();
+        var ready = !!$('#requestBarang').val() && !!$.trim($('#requestNoLot').val()) && !!requestExpiredStorageValue();
         $('#btnSaveOpname').prop('disabled', !ready);
     }
 
@@ -344,7 +361,7 @@ window.addEventListener('load', function () {
         var $expired = $('#manualExpired');
         $expired.empty().append(new Option('Pilih expired date', '', true, true));
         $.each(rows || [], function (_, row) {
-            var option = new Option(formatExpiredDate(row.expired_date || row.text), row.id, false, false);
+            var option = new Option((row.no_lot || '-') + ' / ' + formatExpiredDate(row.expired_date), row.id, false, false);
             $(option).attr('data-dimensi', row.dimensi || 0);
             $expired.append(option);
         });
@@ -357,12 +374,17 @@ window.addEventListener('load', function () {
             toast('warning', 'QRCode belum terbaca');
             return;
         }
+        if (lookupBusy) return;
+        lookupBusy = true;
+        $('#masterId,#scanBarangId').val('');
+        $('#btnSaveOpname').prop('disabled', true);
         setScannerStatus('Mencari');
         $.ajax({
             url: '<?= base_url('admin/stockopname/input/lookup') ?>',
             type: 'POST',
             dataType: 'json',
             data: {scan_value: value},
+            complete: function () { lookupBusy = false; },
             success: function (res) {
                 if (!res.status) {
                     toast('warning', res.message || 'Data tidak ditemukan');
@@ -453,6 +475,7 @@ window.addEventListener('load', function () {
     });
 
 
+    $('#requestNoLot').on('input', validateRequestReady);
     $('#requestExpiredView').on('input', function () {
         $(this).val(formatDateView($(this).val()));
         validateRequestReady();
@@ -480,6 +503,7 @@ window.addEventListener('load', function () {
                     toast('warning', res.message || 'Expired date tidak tersedia');
                     return;
                 }
+                if ($('#manualBarang').val() !== kodeBarang) return;
                 fillManualExpiredOptions(res.data);
             },
             error: function (xhr) {

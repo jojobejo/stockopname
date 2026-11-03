@@ -177,7 +177,7 @@
                                                 <?php endif; ?>
                                                 <td><?= $so_dt($row['requested_at'] ?? $row['created_at'] ?? '-') ?></td>
                                                 <td><?= $so_e($row['nama_barang'] ?? '-') ?></td>
-                                                <td><?= $so_date($row['expired_date'] ?? '-') ?></td>
+                                                <td><?= html_escape($row['no_lot'] ?? '-') ?> / <?= $so_date($row['expired_date'] ?? '-') ?></td>
                                                 <td class="text-center"><?= number_format((int)($row['qty_pcs'] ?? 0), 0, ',', '.') ?></td>
                                                 <td class="text-center"><?= number_format((int)($row['qty_box'] ?? 0), 0, ',', '.') ?></td>
                                                 <td class="text-center font-weight-bold"><?= number_format((int)($row['qty'] ?? 0), 0, ',', '.') ?></td>

@@ -14,7 +14,7 @@ class M_Stockopname extends CI_Model
     public function normalize_pending_calculation_mode($mode)
     {
         $mode = strtolower(trim((string)$mode));
-        return in_array($mode, ['add', 'subtract'], true) ? $mode : 'add';
+        return 'add'; // Pending masih berada di gudang.
     }
 
     public function set_pending_calculation_mode($mode)
@@ -387,7 +387,8 @@ class M_Stockopname extends CI_Model
         return "
             SELECT
                 kode_barang,
-                nama_barang,
+                MAX(nama_barang) AS nama_barang,
+                COALESCE(NULLIF(TRIM(no_lot), ''), '-') AS no_lot,
                 {$expKey} AS exp_key,
                 SUM(CASE WHEN tim_opname = 1 THEN COALESCE(qty, 0) ELSE 0 END) AS qty_tim_1,
                 SUM(CASE WHEN tim_opname = 2 THEN COALESCE(qty, 0) ELSE 0 END) AS qty_tim_2,
@@ -401,7 +402,7 @@ class M_Stockopname extends CI_Model
                 GROUP_CONCAT(DISTINCT wilayah ORDER BY wilayah SEPARATOR ', ') AS wilayah,
                 MAX(created_at) AS last_input
             FROM {$this->opnameTable}
-            GROUP BY kode_barang, nama_barang, exp_key
+            GROUP BY kode_barang, no_lot, exp_key
         ";
     }
 
@@ -412,13 +413,14 @@ class M_Stockopname extends CI_Model
 
         return "
             SELECT
-                nama_barang,
+                kode_barang, MAX(nama_barang) AS nama_barang,
+                COALESCE(NULLIF(TRIM(no_lot), ''), '-') AS no_lot,
                 {$expKey} AS exp_key,
                 SUM(COALESCE(qty, 0)) AS qty_pending,
                 SUM(COALESCE(qty_pcs, 0)) AS pcs_pending,
                 SUM(COALESCE(qty_box, 0)) AS box_pending
             FROM {$this->pendingTable}
-            GROUP BY nama_barang, exp_key
+            GROUP BY kode_barang, no_lot, exp_key
         ";
     }
 
@@ -432,12 +434,11 @@ class M_Stockopname extends CI_Model
         $opname = $this->opname_subquery();
         $pending = $this->pending_expired_subquery();
         $master = "
-            SELECT MIN(id) AS id, kode_barang, nama_barang, MAX(expired_date) AS expired_date,
-                '-' AS no_lot, {$masterQtyExpr} AS qty,
+            SELECT MIN(id) AS id, kode_barang, MAX(nama_barang) AS nama_barang, MAX(expired_date) AS expired_date,
+                COALESCE(NULLIF(TRIM(no_lot), ''), '-') AS no_lot, {$masterQtyExpr} AS qty,
                 SUM(COALESCE(qty_box, 0)) AS qty_box, SUM(COALESCE(qty_pcs, 0)) AS qty_pcs
             FROM {$this->masterTable}
-            WHERE COALESCE(qty, 0) > 0
-            GROUP BY kode_barang, nama_barang, " . $this->exp_key('expired_date');
+            GROUP BY kode_barang, no_lot, " . $this->exp_key('expired_date');
         $saldoSistemExpr = $this->pending_balance_expr('m.qty', 'COALESCE(p.qty_pending, 0)');
 
         return "
@@ -456,9 +457,9 @@ class M_Stockopname extends CI_Model
                 COALESCE(o.qty_tim_2, 0) AS qty_tim_2,
                 COALESCE(o.input_tim_1, 0) AS input_tim_1,
                 COALESCE(o.input_tim_2, 0) AS input_tim_2,
-                CASE WHEN COALESCE(o.input_tim_1, 0) > 0 THEN COALESCE(o.qty_tim_1, 0) ELSE COALESCE(o.qty_tim_2, 0) END AS qty_fisik,
-                CASE WHEN COALESCE(o.input_tim_1, 0) > 0 THEN COALESCE(o.box_tim_1, 0) ELSE COALESCE(o.box_tim_2, 0) END AS box_fisik,
-                CASE WHEN COALESCE(o.input_tim_1, 0) > 0 THEN COALESCE(o.pcs_tim_1, 0) ELSE COALESCE(o.pcs_tim_2, 0) END AS pcs_fisik,
+                CASE WHEN COALESCE(o.input_tim_1, 0) > 0 AND o.qty_tim_1 = {$saldoSistemExpr} THEN COALESCE(o.qty_tim_1, 0) WHEN COALESCE(o.input_tim_2, 0) > 0 AND o.qty_tim_2 = {$saldoSistemExpr} THEN COALESCE(o.qty_tim_2, 0) WHEN COALESCE(o.input_tim_1, 0) > 0 THEN COALESCE(o.qty_tim_1, 0) ELSE COALESCE(o.qty_tim_2, 0) END AS qty_fisik,
+                CASE WHEN COALESCE(o.input_tim_1, 0) > 0 AND o.qty_tim_1 = {$saldoSistemExpr} THEN COALESCE(o.box_tim_1, 0) WHEN COALESCE(o.input_tim_2, 0) > 0 AND o.qty_tim_2 = {$saldoSistemExpr} THEN COALESCE(o.box_tim_2, 0) WHEN COALESCE(o.input_tim_1, 0) > 0 THEN COALESCE(o.box_tim_1, 0) ELSE COALESCE(o.box_tim_2, 0) END AS box_fisik,
+                CASE WHEN COALESCE(o.input_tim_1, 0) > 0 AND o.qty_tim_1 = {$saldoSistemExpr} THEN COALESCE(o.pcs_tim_1, 0) WHEN COALESCE(o.input_tim_2, 0) > 0 AND o.qty_tim_2 = {$saldoSistemExpr} THEN COALESCE(o.pcs_tim_2, 0) WHEN COALESCE(o.input_tim_1, 0) > 0 THEN COALESCE(o.pcs_tim_1, 0) ELSE COALESCE(o.pcs_tim_2, 0) END AS pcs_fisik,
                 COALESCE(o.inputers, '-') AS inputers,
                 COALESCE(o.wilayah, '-') AS wilayah,
                 o.last_input,
@@ -479,12 +480,10 @@ class M_Stockopname extends CI_Model
             FROM ({$master}) m
             LEFT JOIN ({$opname}) o
                 ON o.kode_barang = m.kode_barang
-                AND o.nama_barang = m.nama_barang
-                AND o.exp_key = {$masterExpKey}
+                AND o.exp_key = {$masterExpKey} AND o.no_lot = m.no_lot
             LEFT JOIN ({$pending}) p
-                ON p.nama_barang = m.nama_barang
+                ON p.kode_barang = m.kode_barang AND p.no_lot = m.no_lot
                 AND p.exp_key = {$masterExpKey}
-            WHERE {$saldoSistemExpr} > 0
         ";
     }
 
@@ -716,6 +715,7 @@ class M_Stockopname extends CI_Model
     {
         $master = $this->monitoring_master_all_subquery();
         $opname = $this->monitoring_opname_all_subquery();
+        $lotCompare = $this->monitoring_compare_lot_base();
 
         return "
             SELECT
@@ -729,6 +729,11 @@ class M_Stockopname extends CI_Model
                 x.inputers,
                 x.wilayah,
                 x.last_input,
+                c.total_lot, c.lot_tim_1, c.lot_tim_2,
+                CASE WHEN c.lot_tim_1 = c.total_lot AND c.lot_tim_2 = c.total_lot THEN 'lengkap'
+                     WHEN c.lot_tim_1 = 0 AND c.lot_tim_2 = 0 THEN 'belum_diisi' ELSE 'belum_lengkap' END AS kelengkapan_tim,
+                CASE WHEN c.lot_tim_1 = c.total_lot AND c.lot_tim_2 = c.total_lot
+                     THEN IF(c.lot_sama = c.total_lot, 'sama', 'berbeda') ELSE 'belum_dibandingkan' END AS perbandingan_tim,
                 CASE
                     WHEN x.input_tim_1 = 0 AND x.input_tim_2 = 0 THEN 'not_match'
                     WHEN x.input_tim_1 > 0 AND x.qty_tim_1 = x.qty_buku
@@ -774,14 +779,20 @@ class M_Stockopname extends CI_Model
                         WHERE mz.kode_barang = o.kode_barang
                     )
             ) x
+            LEFT JOIN (
+                SELECT kode_barang, COUNT(*) AS total_lot,
+                    SUM(input_tim_1 > 0) AS lot_tim_1, SUM(input_tim_2 > 0) AS lot_tim_2,
+                    SUM(input_tim_1 > 0 AND input_tim_2 > 0 AND qty_tim_1 = qty_tim_2) AS lot_sama
+                FROM ({$lotCompare}) lc GROUP BY kode_barang
+            ) c ON c.kode_barang = x.kode_barang
         ";
     }
 
-    private function monitoring_master_lot_subquery($includeZeroQty = false)
+    private function monitoring_master_lot_subquery($includeZeroQty = true)
     {
         $this->ensure_pending_tables();
         $expKey = $this->exp_key('expired_date');
-        // Lot is retained only as historical data; it is not part of the opname key.
+        // Barang, lot, dan expired merupakan identitas stok yang dibandingkan.
         $qtyBaseExpr = $this->db->field_exists('pending_qty', $this->masterTable)
             ? 'SUM(COALESCE(qty, 0) - COALESCE(pending_qty, 0))'
             : 'SUM(COALESCE(qty, 0))';
@@ -814,16 +825,16 @@ class M_Stockopname extends CI_Model
                     MAX(nama_barang) AS nama_barang,
                     {$expKey} AS exp_key,
                     MAX(expired_date) AS expired_date,
-                    MAX(no_lot) AS no_lot,
+                    COALESCE(NULLIF(TRIM(no_lot), ''), '-') AS no_lot,
                     MIN(id) AS master_id,
                     {$qtyBaseExpr} AS base_qty,
                     {$boxBaseExpr} AS base_box,
                     {$pcsBaseExpr} AS base_pcs
                 FROM {$this->masterTable}
-                GROUP BY kode_barang, nama_barang, exp_key
+                GROUP BY kode_barang, no_lot, exp_key
             ) mb
             LEFT JOIN ({$pending}) p
-                ON p.nama_barang = mb.nama_barang
+                ON p.kode_barang = mb.kode_barang AND p.no_lot = mb.no_lot
                 AND p.exp_key = mb.exp_key
             {$balanceWhere}
         ";
@@ -843,7 +854,7 @@ class M_Stockopname extends CI_Model
                 MAX(nama_barang) AS nama_barang,
                 {$expKey} AS exp_key,
                 MAX(expired_date) AS expired_date,
-                '-' AS no_lot,
+                COALESCE(NULLIF(TRIM(no_lot), ''), '-') AS no_lot,
                 SUM(CASE WHEN tim_opname = 1 THEN COALESCE(qty, 0) ELSE 0 END) AS qty_tim_1,
                 SUM(CASE WHEN tim_opname = 2 THEN COALESCE(qty, 0) ELSE 0 END) AS qty_tim_2,
                 SUM(CASE WHEN tim_opname = 1 THEN 1 ELSE 0 END) AS input_tim_1,
@@ -853,11 +864,11 @@ class M_Stockopname extends CI_Model
                 {$inputSource},
                 MAX({$createdColumn}) AS last_input
             FROM {$this->opnameTable}
-            GROUP BY kode_barang, nama_barang, exp_key
+            GROUP BY kode_barang, no_lot, exp_key
         ";
     }
 
-    private function monitoring_compare_lot_base($includeZeroMasterQty = false)
+    private function monitoring_compare_lot_base($includeZeroMasterQty = true)
     {
         $master = $this->monitoring_master_lot_subquery($includeZeroMasterQty);
         $opname = $this->monitoring_opname_lot_subquery();
@@ -879,6 +890,11 @@ class M_Stockopname extends CI_Model
                 x.wilayah,
                 x.input_sources,
                 x.last_input,
+                CASE WHEN x.input_tim_1 > 0 AND x.input_tim_2 > 0 THEN 'lengkap'
+                     WHEN x.input_tim_1 > 0 THEN 'menunggu_tim_2'
+                     WHEN x.input_tim_2 > 0 THEN 'menunggu_tim_1' ELSE 'belum_diisi' END AS kelengkapan_tim,
+                CASE WHEN x.input_tim_1 > 0 AND x.input_tim_2 > 0
+                     THEN IF(x.qty_tim_1 = x.qty_tim_2, 'sama', 'berbeda') ELSE 'belum_dibandingkan' END AS perbandingan_tim,
                 CASE
                     WHEN x.input_tim_1 = 0 AND x.input_tim_2 = 0 THEN 'not_match'
                     WHEN x.input_tim_1 > 0 AND x.qty_tim_1 = x.qty_buku
@@ -908,8 +924,7 @@ class M_Stockopname extends CI_Model
                 FROM ({$master}) m
                 LEFT JOIN ({$opname}) o
                     ON o.kode_barang = m.kode_barang
-                    AND o.nama_barang = m.nama_barang
-                    AND o.exp_key = m.exp_key
+                        AND o.exp_key = m.exp_key AND o.no_lot = m.no_lot
                 UNION ALL
                 SELECT
                     0 AS master_id,
@@ -929,8 +944,7 @@ class M_Stockopname extends CI_Model
                 FROM ({$opname}) o
                 LEFT JOIN ({$master}) m
                     ON m.kode_barang = o.kode_barang
-                    AND m.nama_barang = o.nama_barang
-                    AND m.exp_key = o.exp_key
+                    AND m.exp_key = o.exp_key AND m.no_lot = o.no_lot
                 WHERE m.kode_barang IS NULL
                     AND (
                         FIND_IN_SET('manual opname request', COALESCE(o.input_sources, '')) > 0
@@ -939,8 +953,7 @@ class M_Stockopname extends CI_Model
                         SELECT 1
                         FROM {$this->masterTable} mz
                         WHERE mz.kode_barang = o.kode_barang
-                            AND mz.nama_barang = o.nama_barang
-                            AND {$masterZeroExpKey} = o.exp_key
+                            AND {$masterZeroExpKey} = o.exp_key AND COALESCE(NULLIF(TRIM(mz.no_lot), ''), '-') = o.no_lot
                         )
                     )
             ) x
@@ -1658,12 +1671,12 @@ class M_Stockopname extends CI_Model
         $expKey = $this->exp_key('expired_date');
 
         return $this->db->query("\n            SELECT MIN(id) AS id, kode_barang, MAX(nama_barang) AS nama_barang,
-                MAX(expired_date) AS expired_date, '-' AS no_lot,
+                MAX(expired_date) AS expired_date, COALESCE(NULLIF(TRIM(no_lot), ''), '-') AS no_lot,
                 SUM(COALESCE(qty, 0)) AS qty, SUM(COALESCE(qty_pcs, 0)) AS qty_pcs,
                 SUM(COALESCE(qty_box, 0)) AS qty_box, {$dimensi} AS dimensi
             FROM {$this->masterTable}
             WHERE kode_barang = ?
-            GROUP BY kode_barang, nama_barang, {$expKey}
+            GROUP BY kode_barang, nama_barang, no_lot, {$expKey}
             ORDER BY {$expKey} ASC
         ", [$kodeBarang])->result_array();
     }
@@ -1685,8 +1698,7 @@ class M_Stockopname extends CI_Model
             ? 'no_lot'
             : ($this->db->field_exists('nolot', $this->opnameTable) ? 'nolot' : "'-'");
         $expKey = $this->exp_key('expired_date');
-        // Keep the existing query shape, but group by name instead of lot.
-        $lotKey = 'nama_barang';
+        $lotKey = $this->lot_key($noLotColumn);
         $baseSql = $this->supervisor_wilayah_compare_base_sql($noLotColumn, $createdColumn, $expKey, $lotKey);
         $bindings = [$wilayah];
         $where = [];
@@ -1749,64 +1761,25 @@ class M_Stockopname extends CI_Model
         $expKey = $this->exp_key('expired_date');
         $dimensi = $this->master_dimensi_aggregate_sql($this->masterTable . '.kode_barang');
         return $this->db->query("\n            SELECT MIN(id) AS id, kode_barang, MAX(nama_barang) AS nama_barang,
-                MAX(expired_date) AS expired_date, '-' AS no_lot,
+                MAX(expired_date) AS expired_date, COALESCE(NULLIF(TRIM(no_lot), ''), '-') AS no_lot,
                 {$dimensi} AS dimensi,
                 SUM(COALESCE(qty, 0)) AS qty, SUM(COALESCE(qty_pcs, 0)) AS qty_pcs,
                 SUM(COALESCE(qty_box, 0)) AS qty_box
             FROM {$this->masterTable}
             WHERE kode_barang = ?
-            GROUP BY kode_barang, nama_barang, {$expKey}
+            GROUP BY kode_barang, nama_barang, no_lot, {$expKey}
             ORDER BY {$expKey} ASC
         ", [$kodeBarang])->result_array();
     }
 
     public function pending_totals_by_kode_barang($kodeBarang)
     {
-        $kodeBarang = trim((string)$kodeBarang);
-        if ($kodeBarang === '' || !$this->ensure_pending_tables() || !$this->db->table_exists($this->masterTable)) {
-            return [];
-        }
-
-        $whereKode = '';
-        $params = [$kodeBarang];
-        if ($this->db->field_exists('kode_barang', $this->pendingTable)) {
-            $whereKode = " OR p.kode_barang = ?";
-            $params[] = $kodeBarang;
-        }
-
-        $rows = $this->db->query("
-            SELECT
-                p.nama_barang,
-                p.expired_date,
-                COALESCE(SUM(p.qty), 0) AS qty,
-                COALESCE(SUM(p.qty_pcs), 0) AS qty_pcs,
-                COALESCE(SUM(p.qty_box), 0) AS qty_box
-            FROM {$this->pendingTable} p
-            WHERE EXISTS (
-                SELECT 1
-                FROM {$this->masterTable} m
-                WHERE m.kode_barang = ?
-                  AND m.nama_barang = p.nama_barang
-                  AND m.expired_date = p.expired_date
-                LIMIT 1
-            ){$whereKode}
-            GROUP BY p.nama_barang, p.expired_date
-        ", $params)->result_array();
-
+        if (!$this->ensure_pending_tables()) { return []; }
+        $rows = $this->db->query("SELECT expired_date, COALESCE(NULLIF(TRIM(no_lot), ''), '-') AS no_lot,
+            SUM(qty) AS qty, SUM(qty_box) AS qty_box, SUM(qty_pcs) AS qty_pcs
+            FROM {$this->pendingTable} WHERE kode_barang = ? GROUP BY expired_date, no_lot", [$kodeBarang])->result_array();
         $result = [];
-        foreach ($rows as $row) {
-            $key = trim((string)($row['nama_barang'] ?? '')) . '|' . trim((string)($row['expired_date'] ?? ''));
-            if ($key === '|') {
-                continue;
-            }
-
-            $result[$key] = [
-                'qty' => (int)($row['qty'] ?? 0),
-                'qty_pcs' => (int)($row['qty_pcs'] ?? 0),
-                'qty_box' => (int)($row['qty_box'] ?? 0),
-            ];
-        }
-
+        foreach ($rows as $row) { $result[$row['expired_date'].'|'.$row['no_lot']] = $row; }
         return $result;
     }
 
@@ -2059,10 +2032,12 @@ class M_Stockopname extends CI_Model
         if (
             $this->db->table_exists($this->masterBarangAllTable)
             && $this->db->field_exists('kd_barang', $this->masterBarangAllTable)
-            && $this->db->field_exists('dimensi', $this->masterBarangAllTable)
+            && $this->db->field_exists('p', $this->masterBarangAllTable)
+            && $this->db->field_exists('l', $this->masterBarangAllTable)
+            && $this->db->field_exists('t', $this->masterBarangAllTable)
         ) {
             $kodeMatch = $this->kode_barang_match_sql('mba.kd_barang', $kodeColumn);
-            return "COALESCE((SELECT COALESCE(mba.dimensi, 0) FROM {$this->masterBarangAllTable} mba WHERE {$kodeMatch} LIMIT 1), {$fallback})";
+            return "COALESCE((SELECT (COALESCE(mba.p, 0) * COALESCE(mba.l, 0) * COALESCE(mba.t, 0)) FROM {$this->masterBarangAllTable} mba WHERE {$kodeMatch} LIMIT 1), {$fallback})";
         }
 
         return $fallback;
@@ -2077,10 +2052,12 @@ class M_Stockopname extends CI_Model
         if (
             $this->db->table_exists($this->masterBarangAllTable)
             && $this->db->field_exists('kd_barang', $this->masterBarangAllTable)
-            && $this->db->field_exists('dimensi', $this->masterBarangAllTable)
+            && $this->db->field_exists('p', $this->masterBarangAllTable)
+            && $this->db->field_exists('l', $this->masterBarangAllTable)
+            && $this->db->field_exists('t', $this->masterBarangAllTable)
         ) {
             $kodeMatch = $this->kode_barang_match_sql('mba.kd_barang', $kodeColumn);
-            return "COALESCE((SELECT COALESCE(mba.dimensi, 0) FROM {$this->masterBarangAllTable} mba WHERE {$kodeMatch} LIMIT 1), {$fallback})";
+            return "COALESCE((SELECT (COALESCE(mba.p, 0) * COALESCE(mba.l, 0) * COALESCE(mba.t, 0)) FROM {$this->masterBarangAllTable} mba WHERE {$kodeMatch} LIMIT 1), {$fallback})";
         }
 
         return $fallback;
@@ -2351,6 +2328,15 @@ class M_Stockopname extends CI_Model
 
     public function add_request_item_to_opname($kodeBarang, $expiredDate, $noLot, $payload, $actor)
     {
+        $key = 'opname_request_' . substr(hash('sha256', $kodeBarang), 0, 40);
+        $lock = $this->db->query('SELECT GET_LOCK(?, 5) AS acquired', [$key])->row_array();
+        if (empty($lock['acquired'])) { return ['status' => false, 'message' => 'Request sedang diproses admin lain.']; }
+        try { return $this->process_request_item($kodeBarang, $expiredDate, $noLot, $payload, $actor); }
+        finally { $this->db->query('SELECT RELEASE_LOCK(?)', [$key]); }
+    }
+
+    private function process_request_item($kodeBarang, $expiredDate, $noLot, $payload, $actor)
+    {
         if (!$this->ready() || !$this->ensure_manual_tables() || !$this->ensure_opname_log_table() || !$this->ensure_opname_input_source_column() || !$this->ensure_master_input_status_columns()) {
             return ['status' => false, 'message' => 'Tabel opname atau request item belum siap.'];
         }
@@ -2365,7 +2351,7 @@ class M_Stockopname extends CI_Model
         } else {
             $this->db
                 ->where('kode_barang', $kodeBarang)
-                ->where('expired_date', $expiredDate);
+                ->where('expired_date', $expiredDate)->where('no_lot', $noLot);
         }
         $request = $this->db->order_by('id', 'DESC')->limit(1)->get()->row_array();
         if (!$request) {
@@ -2386,7 +2372,7 @@ class M_Stockopname extends CI_Model
         if (!in_array($requestTimOpname, [1, 2], true)) {
             return ['status' => false, 'message' => 'Tim opname pada request item tidak valid.'];
         }
-        if (($requestQtyBox + $requestQtyPcs) <= 0) {
+        if ($requestQtyBox < 0 || $requestQtyPcs < 0 || ($requestQtyBox > 0 && $dimension <= 0)) {
             return ['status' => false, 'message' => 'Qty request item tidak valid.'];
         }
         $requestInputBy = trim((string)($request['requested_by'] ?? ''));
@@ -2651,6 +2637,18 @@ class M_Stockopname extends CI_Model
         $qrcodeError = $this->db->field_exists('qrcode_error_message', $this->masterTable) ? 'qrcode_error_message' : 'NULL AS qrcode_error_message';
         $dimensi = $this->master_dimensi_select_sql();
 
+        $pendingSelect = '0 AS pending_qty, 0 AS pending_qty_box, 0 AS pending_qty_pcs';
+        if ($this->db->table_exists($this->pendingTable)) {
+            $parts = [];
+            foreach (['qty', 'qty_box', 'qty_pcs'] as $qtyField) {
+                $parts[] = "(SELECT COALESCE(SUM(p.{$qtyField}), 0) FROM {$this->pendingTable} p
+                    WHERE p.kode_barang = {$this->masterTable}.kode_barang
+                    AND p.expired_date = {$this->masterTable}.expired_date
+                    AND COALESCE(NULLIF(TRIM(p.no_lot), ''), '-') = COALESCE(NULLIF(TRIM({$this->masterTable}.no_lot), ''), '-')) AS pending_{$qtyField}";
+            }
+            $pendingSelect = implode(',', $parts);
+        }
+
         $this->db->select('
             id,
             kode_barang,
@@ -2660,6 +2658,7 @@ class M_Stockopname extends CI_Model
             COALESCE(qty, 0) AS qty,
             COALESCE(qty_pcs, 0) AS qty_pcs,
             COALESCE(qty_box, 0) AS qty_box,
+            ' . $pendingSelect . ',
             ' . $dimensi . ',
             ' . $qrcode . ',
             ' . $barcode . ',
@@ -2844,6 +2843,7 @@ class M_Stockopname extends CI_Model
                 'satuan' => '-',
                 'berat' => 0,
                 'kubikasi' => (string)$dimensi,
+                'dimensi' => $dimensi,
                 'qty_min' => 0,
             ];
             if (!$this->db->insert($this->masterBarangAllTable, $data)) {
@@ -2898,6 +2898,7 @@ class M_Stockopname extends CI_Model
             'l' => $l,
             't' => $t,
             'kubikasi' => (string)$dimensi,
+            'dimensi' => $dimensi,
         ];
 
         $updated = $this->db
@@ -3125,59 +3126,14 @@ class M_Stockopname extends CI_Model
 
     private function sync_pending_to_master($namaBarang, $expiredDate)
     {
-        if (!$this->ensure_pending_tables() || !$this->db->table_exists($this->masterTable)) {
-            return ['status' => false, 'message' => 'Tabel pending atau master opname belum siap.'];
-        }
-
-        $key = $this->normalize_pending_key($namaBarang, $expiredDate);
-        if ($key['nama_barang'] === '' || $key['expired_date'] === '') {
-            return ['status' => false, 'message' => 'Nama barang dan expired date wajib tersedia untuk sinkronisasi pending.'];
-        }
-
-        $masters = $this->db
-            ->select('id, qty, qty_pcs, qty_box, pending_qty, pending_qty_pcs, pending_qty_box')
-            ->from($this->masterTable)
-            ->where('nama_barang', $key['nama_barang'])
-            ->where('expired_date', $key['expired_date'])
-            ->order_by('id', 'ASC')
-            ->get()
-            ->result_array();
-        if (empty($masters)) {
-            return ['status' => true, 'message' => 'Data pending tersimpan, namun belum ada master opname dengan nama barang dan expired date yang sama.', 'target_id' => 0];
-        }
-
-        $totals = $this->pending_totals($key['nama_barang'], $key['expired_date']);
-        $target = $masters[0];
-        $baseQty = max(0, (int)$target['qty'] - (int)$target['pending_qty']);
-        $basePcs = max(0, (int)$target['qty_pcs'] - (int)$target['pending_qty_pcs']);
-        $baseBox = max(0, (int)$target['qty_box'] - (int)$target['pending_qty_box']);
-
-        $this->db->where('nama_barang', $key['nama_barang'])
-            ->where('expired_date', $key['expired_date'])
-            ->update($this->masterTable, [
-                'pending_qty' => 0,
-                'pending_qty_pcs' => 0,
-                'pending_qty_box' => 0,
-            ]);
-
-        $updated = $this->db
-            ->where('id', (int)$target['id'])
-            ->update($this->masterTable, [
-                'qty' => $this->pending_calculation_mode() === 'subtract' ? $baseQty - $totals['qty'] : $baseQty + $totals['qty'],
-                'qty_pcs' => $this->pending_calculation_mode() === 'subtract' ? $basePcs - $totals['qty_pcs'] : $basePcs + $totals['qty_pcs'],
-                'qty_box' => $this->pending_calculation_mode() === 'subtract' ? $baseBox - $totals['qty_box'] : $baseBox + $totals['qty_box'],
-                'pending_qty' => $this->pending_marker_value($totals['qty']),
-                'pending_qty_pcs' => $this->pending_marker_value($totals['qty_pcs']),
-                'pending_qty_box' => $this->pending_marker_value($totals['qty_box']),
-            ]);
-
-        return [
-            'status' => (bool)$updated,
-            'message' => $updated ? 'Qty pending berhasil disinkronkan ke master opname.' : 'Gagal sinkronisasi pending ke master opname.',
-            'target_id' => (int)$target['id'],
-            'totals' => $totals,
-            'mode' => $this->pending_calculation_mode(),
-        ];
+        if (!$this->ensure_pending_tables()) { return ['status' => false]; }
+        // Legacy qty contains signed pending markers. Restore base once; queries add live pending.
+        $updated = $this->db->query("UPDATE {$this->masterTable}
+            SET qty = qty - pending_qty, qty_box = qty_box - pending_qty_box,
+                qty_pcs = qty_pcs - pending_qty_pcs,
+                pending_qty = 0, pending_qty_box = 0, pending_qty_pcs = 0
+            WHERE nama_barang = ? AND expired_date = ?", [$namaBarang, $expiredDate]);
+        return ['status' => (bool)$updated, 'mode' => 'add'];
     }
 
     private function sync_pending_keys(array $keys)
@@ -3219,7 +3175,13 @@ class M_Stockopname extends CI_Model
             ->get()
             ->row_array();
 
+        $unmatched = $this->db->query("SELECT COUNT(*) AS total FROM {$this->pendingTable} p
+            WHERE NOT EXISTS (SELECT 1 FROM {$this->masterTable} m
+                WHERE m.kode_barang = p.kode_barang AND m.expired_date = p.expired_date
+                AND COALESCE(NULLIF(TRIM(m.no_lot), ''), '-') = COALESCE(NULLIF(TRIM(p.no_lot), ''), '-'))")->row_array();
+
         return [
+            'unmatched_count' => (int)($unmatched['total'] ?? 0),
             'total_item' => (int)($row['total_item'] ?? 0),
             'total_qty' => (int)($row['total_qty'] ?? 0),
             'total_qty_pcs' => (int)($row['total_qty_pcs'] ?? 0),
@@ -3244,20 +3206,20 @@ class M_Stockopname extends CI_Model
                 kode_barang,
                 MAX(nama_barang) AS nama_barang,
                 MAX(expired_date) AS expired_date,
-                '-' AS no_lot,
+                COALESCE(NULLIF(TRIM(no_lot), ''), '-') AS no_lot,
                 {$dimensi} AS dimensi,
                 SUM(COALESCE(qty, 0)) AS qty,
                 SUM(COALESCE(qty_pcs, 0)) AS qty_pcs,
                 SUM(COALESCE(qty_box, 0)) AS qty_box
             FROM {$this->masterTable}
             WHERE TRIM(COALESCE(kode_barang, '')) <> ''
-            GROUP BY kode_barang, nama_barang, {$expKey}
+            GROUP BY kode_barang, nama_barang, no_lot, {$expKey}
             ORDER BY kode_barang ASC, {$expKey} ASC
             LIMIT " . max(1, min(20000, (int)$limit))
         )->result_array();
     }
 
-    public function pending_master_option($kodeBarang, $expiredDate)
+    public function pending_master_option($kodeBarang, $expiredDate, $noLot = '-')
     {
         $kodeBarang = trim((string)$kodeBarang);
         $expiredDate = trim((string)$expiredDate);
@@ -3267,7 +3229,7 @@ class M_Stockopname extends CI_Model
 
         $rows = $this->master_item_options_by_kode_barang($kodeBarang);
         foreach ($rows as $row) {
-            if ((string)($row['expired_date'] ?? '') === $expiredDate) {
+            if ((string)($row['expired_date'] ?? '') === $expiredDate && (string)$row['no_lot'] === (string)$noLot) {
                 return $row;
             }
         }
@@ -3310,7 +3272,7 @@ class M_Stockopname extends CI_Model
             ->select('p.id, p.kd_do, p.kode_barang, p.nama_barang, p.expired_date, p.no_lot, p.qty, p.qty_pcs, p.qty_box, p.created_by, p.updated_by, p.created_at, p.updated_at, ' . $masterIdSelect . ', ' . $masterKodeSelect, false)
             ->from($this->pendingTable . ' p');
         if ($this->db->table_exists($this->masterTable)) {
-            $this->db->join($this->masterTable . ' m', 'm.id = (SELECT MIN(mi.id) FROM ' . $this->masterTable . ' mi WHERE mi.nama_barang = p.nama_barang AND mi.expired_date = p.expired_date)', 'left', false);
+            $this->db->join($this->masterTable . ' m', 'm.id = (SELECT MIN(mi.id) FROM ' . $this->masterTable . " mi WHERE mi.kode_barang = p.kode_barang AND mi.expired_date = p.expired_date AND COALESCE(NULLIF(TRIM(mi.no_lot), ''), '-') = COALESCE(NULLIF(TRIM(p.no_lot), ''), '-'))", 'left', false);
         }
         $this->apply_pending_keyword($keyword);
 
@@ -3375,17 +3337,17 @@ class M_Stockopname extends CI_Model
             $this->db->insert($this->pendingTable, $data);
             $id = (int)$this->db->insert_id();
         }
+        $keys = [$data];
+        if ($previous) {
+            $keys[] = $previous;
+        }
+        $sync = $this->sync_pending_keys($keys);
         if ($this->db->trans_status() === false || $id <= 0) {
             $this->db->trans_rollback();
             return ['status' => false, 'message' => 'Gagal menyimpan barang pending.'];
         }
         $this->db->trans_commit();
 
-        $keys = [$data];
-        if ($previous) {
-            $keys[] = $previous;
-        }
-        $sync = $this->sync_pending_keys($keys);
         $row = $this->pending_by_id($id);
         return ['status' => true, 'message' => 'Barang pending berhasil disimpan.', 'data' => ['row' => $row, 'sync' => $sync]];
     }
@@ -3400,12 +3362,12 @@ class M_Stockopname extends CI_Model
 
         $this->db->trans_begin();
         $this->db->where('id', (int)$id)->delete($this->pendingTable);
+        $sync = $this->sync_pending_keys([$row]);
         if ($this->db->trans_status() === false) {
             $this->db->trans_rollback();
             return ['status' => false, 'message' => 'Gagal menghapus barang pending.'];
         }
         $this->db->trans_commit();
-        $sync = $this->sync_pending_keys([$row]);
 
         return ['status' => true, 'message' => 'Barang pending berhasil dihapus.', 'data' => ['sync' => $sync]];
     }
@@ -3641,60 +3603,70 @@ class M_Stockopname extends CI_Model
             ->row_array();
     }
 
+    public function catalog_item($id = 0, $kode = '')
+    {
+        $this->db->select('id AS barang_id, kd_barang AS kode_barang, nama_barang, (COALESCE(p,0)*COALESCE(l,0)*COALESCE(t,0)) AS dimensi', false)
+            ->from($this->masterBarangAllTable);
+        if ($id > 0) { $this->db->where('id', (int)$id); }
+        else { $this->db->where('kd_barang', $kode); }
+        return $this->db->limit(1)->get()->row_array();
+    }
+
+    public function catalog_qrcode_by_codes(array $codes)
+    {
+        if (!$codes || !$this->db->table_exists($this->masterBarangAllTable)) {
+            return [];
+        }
+        $catalog = [];
+        foreach (array_chunk(array_values(array_unique($codes)), 500) as $batch) {
+            $rows = $this->db->select('id, kd_barang, qrcode')
+                ->from($this->masterBarangAllTable)
+                ->where_in('kd_barang', $batch)
+                ->order_by('id', 'ASC')
+                ->get()->result_array();
+            foreach ($rows as $row) {
+                $code = strtoupper(trim((string)$row['kd_barang']));
+                if (!isset($catalog[$code])) {
+                    $catalog[$code] = $row;
+                }
+            }
+        }
+        return $catalog;
+    }
+
+    public function save_catalog_qrcode($id, $path)
+    {
+        return $this->db->where('id', (int)$id)->update($this->masterBarangAllTable, ['qrcode' => $path]);
+    }
+
+    public function catalog_scan($value)
+    {
+        if (preg_match('/^BR\|(\d+)$/', $value, $match)) {
+            return $this->catalog_item((int)$match[1]);
+        }
+        // Label lama mengenali barang; lot wajib dipilih kembali.
+        if (preg_match('/^OP\|(.+)\|(\d+)$/', $value, $match)) {
+            $legacy = $this->get_master_barang_by_id((int)$match[2]);
+            return $legacy && $legacy['kode_barang'] === $match[1]
+                ? $this->catalog_item(0, $match[1]) : null;
+        }
+        return $this->catalog_item(0, $value);
+    }
+
     public function manual_barang_options($term = '', $page = 1, $limit = 20)
     {
-        if (!$this->db->table_exists($this->masterTable)) {
-            return [
-                'results' => [],
-                'pagination' => ['more' => false],
-            ];
-        }
-
-        $term = trim((string)$term);
-        $page = max(1, (int)$page);
         $limit = max(1, min(50, (int)$limit));
-        $offset = ($page - 1) * $limit;
-
-        $this->db
-            ->select('MIN(id) AS first_id, nama_barang, COUNT(*) AS total_lot', false)
-            ->from($this->masterTable);
-        if ($term !== '') {
-            $this->db->group_start();
-            $this->db->like('nama_barang', $term);
-            $this->db->or_like('kode_barang', $term);
-            $this->db->group_end();
+        $this->db->select('kd_barang AS id, nama_barang, (COALESCE(p,0)*COALESCE(l,0)*COALESCE(t,0)) AS dimensi', false)
+            ->from($this->masterBarangAllTable);
+        if (trim($term) !== '') {
+            $this->db->group_start()->like('nama_barang', $term)->or_like('kd_barang', $term)->group_end();
         }
-        $this->db
-            ->group_by('nama_barang')
-            ->order_by('nama_barang', 'ASC')
-            ->limit($limit + 1, $offset);
-
-        $rows = $this->db->get()->result_array();
+        $rows = $this->db->order_by('nama_barang')->limit($limit + 1, (max(1, (int)$page)-1)*$limit)->get()->result_array();
         $more = count($rows) > $limit;
-        if ($more) {
-            array_pop($rows);
-        }
-
-        $results = [];
-        foreach ($rows as $row) {
-            $firstId = (int)($row['first_id'] ?? 0);
-            $firstRow = $firstId > 0 ? $this->get_master_barang_by_id($firstId) : null;
-            $kodeBarang = (string)($firstRow['kode_barang'] ?? '');
-            $namaBarang = (string)($row['nama_barang'] ?? '');
-            $results[] = [
-                'id' => $kodeBarang,
-                'text' => $namaBarang,
-                'kode_barang' => $kodeBarang,
-                'nama_barang' => $namaBarang,
-                'dimensi' => (int)($firstRow['dimensi'] ?? 0),
-                'total_lot' => (int)($row['total_lot'] ?? 0),
-            ];
-        }
-
-        return [
-            'results' => $results,
-            'pagination' => ['more' => $more],
-        ];
+        if ($more) { array_pop($rows); }
+        foreach ($rows as &$row) { $row['text'] = $row['id'].' - '.$row['nama_barang']; }
+        unset($row);
+        return ['results' => $rows, 'pagination' => ['more' => $more]];
     }
 
     public function manual_lot_options($kodeBarang)
@@ -3743,14 +3715,14 @@ class M_Stockopname extends CI_Model
         $seen = [];
         foreach ($rows as $row) {
             $expired = (string)($row['expired_date'] ?? '');
-            $key = $expired;
+            $key = trim((string)$row['no_lot']) . '|' . $expired;
             if (isset($seen[$key])) {
                 continue;
             }
             $seen[$key] = true;
             $options[] = [
                 'id' => (int)($row['id'] ?? 0),
-                'text' => $expired,
+                'text' => $row['no_lot'] . ' / ' . $expired,
                 'expired_date' => $expired,
                 'no_lot' => (string)($row['no_lot'] ?? '-'),
                 'dimensi' => (int)($row['dimensi'] ?? 0),
@@ -3901,6 +3873,7 @@ class M_Stockopname extends CI_Model
             ->from($this->masterTable)
             ->where('kode_barang', $kodeBarang)
             ->where('expired_date', $expiredDate)
+            ->where('no_lot', $noLot)
             ->get()
             ->result_array();
         if (!$rows) {
@@ -3946,6 +3919,7 @@ class M_Stockopname extends CI_Model
         if (!$this->db->table_exists($table)
             || !$this->db->field_exists('kode_barang', $table)
             || !$this->db->field_exists('expired_date', $table)
+            || !$this->db->field_exists('no_lot', $table)
         ) {
             return 0;
         }
@@ -3953,6 +3927,7 @@ class M_Stockopname extends CI_Model
         $this->db
             ->where('kode_barang', $kodeBarang)
             ->where('expired_date', $expiredDate)
+            ->where('no_lot', $noLot)
             ->delete($table);
 
         return max(0, (int)$this->db->affected_rows());
@@ -4262,6 +4237,12 @@ class M_Stockopname extends CI_Model
         if (!$this->ensure_master_input_status_columns()) {
             return 0;
         }
+
+        $existing = $this->db->select('id')->from($this->masterTable)
+            ->where('kode_barang', $masterRow['kode_barang'])
+            ->where('expired_date', $input['expired_date'])
+            ->where('no_lot', $input['no_lot'] ?? '-')->limit(1)->get()->row_array();
+        if ($existing) { return (int)$existing['id']; }
 
         $available = array_map(function ($field) {
             return $field->name;

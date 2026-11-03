@@ -1,0 +1,20 @@
+{
+    "mode": "apply",
+    "pending_rows": 209,
+    "will_change": 198,
+    "unresolved": 11,
+    "totals_before": {
+        "n": "209",
+        "qty": "67682",
+        "box": "3025",
+        "pcs": "1441"
+    },
+    "totals_after": {
+        "n": "209",
+        "qty": "67682",
+        "box": "3025",
+        "pcs": "1441"
+    },
+    "backup": "C:\\xampp\\htdocs\\stockopname\\database\/backups\/pending_mapping_20261103_113503",
+    "applied_rows": 198
+}

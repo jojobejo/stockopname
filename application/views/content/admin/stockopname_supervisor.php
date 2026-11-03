@@ -435,7 +435,7 @@ $formatTime = static function ($value) {
                                                     <div class="sup-qty"><small>Qty Pcs</small><strong><?= number_format((int)($row['qty_pcs'] ?? 0), 0, ',', '.') ?></strong></div>
                                                 </div>
                                                 <div class="sup-request-action">
-                                                    <button type="button" class="btn btn-success btn-sm btn-affirm" data-id="<?= (int)$row['id'] ?>"><i class="fas fa-check-circle"></i> Afirmasi Request</button>
+                                                    <span class="badge badge-warning">Menunggu proses admin</span>
                                                 </div>
                                             </div>
                                         <?php endforeach; ?>
