@@ -1,0 +1,110 @@
+.judul {
+    position: relative;
+    top: 500px;
+}
+
+.divgbrindek {
+    position: relative;
+}
+
+.tmbl1 {
+    position: relative;
+    top: 320px;
+    left: -125px;
+    opacity: 0;
+    background-color: #04AA6D;
+    border: 1px solid black;
+    color: white;
+    padding: 165px 130px;
+    text-align: center;
+    text-decoration: none;
+    display: inline-block;
+    cursor: pointer;
+}
+
+.tmbl2 {
+    position: relative;
+    top: 320px;
+    left: -105px;
+    opacity: 0;
+    background-color: #04AA6D;
+    border: 1px solid black;
+    color: white;
+    padding: 165px 130px;
+    text-align: center;
+    text-decoration: none;
+    display: inline-block;
+    cursor: pointer;
+}
+
+.tmbl3 {
+    position: relative;
+    top: 320px;
+    left: -85px;
+    opacity: 0;
+    background-color: #04AA6D;
+    border: 1px solid black;
+    color: white;
+    padding: 165px 130px;
+    text-align: center;
+    text-decoration: none;
+    display: inline-block;
+    cursor: pointer;
+}
+
+.tmbl4 {
+    position: relative;
+    top: 320px;
+    left: -65px;
+    opacity: 0;
+    background-color: #04AA6D;
+    border: 1px solid black;
+    color: white;
+    padding: 165px 130px;
+    text-align: center;
+    text-decoration: none;
+    display: inline-block;
+    cursor: pointer;
+}
+
+.tmbl5 {
+    position: relative;
+    top: -10px;
+    left: 1000px;
+    opacity: 0;
+    background-color: #04AA6D;
+    border: 1px solid black;
+    color: white;
+    padding: 165px 130px;
+    text-align: center;
+    text-decoration: none;
+    display: inline-block;
+    cursor: pointer;
+}
+
+
+.bgipkp {
+    background-image: url(images/IPP-3.jpg);
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: contain;
+    background-color: #005AA6;
+}
+
+.sjam {
+    position: relative;
+    top: 35px;
+    left: 475px;
+    font-size: 45px;    
+    font-weight: bolder;
+}
+
+.sdate {
+    position: relative;
+    top: -10px;
+    left: 130px;
+    font-size: 40px;
+    font-weight: bolder;
+    font-family: "Gill Sans", sans-serif;
+
+}

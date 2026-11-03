@@ -1,0 +1,48 @@
+
+GOAL ICS : 
+1. Stock barang dapat diketahui secara detail by allbarang & Expired date (V)
+2. Data keluar masuk barang per hari ini (X)
+3. Menampilkan Histori LPB & PO Berdasarkan tanggal DO terbuat (v)
+4. Diffrent setiap PIC (v)
+5. Dapat melihat Detail data do dan po (v)
+6. Data ter integrasi dengan LPB (zahir Digital) dan DO (Digital ICS) (x)
+
+NOTE - TRIAL :
+1. pencarian pada data all barang dan expired date
+2. input expired baru dari ics dengan qty fisik asli namun qty all 0 , untuk dapat di masukan data csv LPB
+3. module view DO tambah kolom kios & rute , dan 
+4. ada pada module LPB kolom note (zahir digital - pembelian  lot \ gudang pembelian lot ) 
+5. PO / LPB  : edit kode faktur jadi nomor lpb
+6. view detail sesuaikan dengan kartu stock 
+7. file upload , PIC dan kordinat  
+8. export file 
+
+REPORT : TRIAL DONE / TAMBAHAN BARU 
+
+API logging
+Rate limit
+
+1. API lambat = UI lemot
+        -caching
+        -queue
+        -atau minimal timeout CURL
+
+2. API down = aplikasi mati
+        -fallback response
+        -logging error
+
+3.Data gede = loading suwi
+        -pagination di API
+
+
+Giulio Leone
+ident {rng 2792840142 id E1_82022}
+
+Lorenzo Amato
+ident {rng 3035355368 id E1_70033}
+
+Clara Hoffmann
+ident {rng 3288262340 id E1_70544}
+
+
+trait-organized trait-hardworking trait-cautious

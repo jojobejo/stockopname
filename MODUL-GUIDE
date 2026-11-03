@@ -1,0 +1,43 @@
+QUERY PERHITUNGAN ICS BERDASARKAN EXPIRED DATE
+
+| Komponen            | Penjelasan                                                                         |
+| ------------------- | ---------------------------------------------------------------------------------- |
+| `saldo_awal_qty`    | Diambil dari `tb_saldo_awal`, dijumlahkan berdasarkan `nama_barang` dan `exp_date` |
+| `qty_in`            | Dari `tb_ics_po`                                                                   |
+| `qty_out`           | Dari `tb_ics_do`                                                                   |
+| `saldo_akhir_qty`   | Hasil hitung: `saldo_awal_qty + qty_in - qty_out`                                  |
+| `fisik_ics`         | Jumlah aktual yang dicatat di `tb_ics_opname`                                      |
+| `qty_selisih`       | Selisih antara `fisik_ics` dan `saldo_akhir_qty`                                   |
+| `status_kesesuaian` | Menunjukkan apakah stok fisik sesuai dengan sistem                                 |
+
+=====================================================================================================================
+
+Module urgent
+login menggunakan akun masing masing , sektorisasi berdasarkan akun dan tim
+setelah login tampilkan data berdasarkan wilayah / lokasi
+
+data inputan ditambah keterangan lokasi input dan wilayahnya
+
+session ditambah keterangan TIM
+
+https://localhost/karismaerp/ics/stock_by_kodebr/QIU01062
+rapikan tampilan detail
+
+bedakan routing berdasarkan login
+
+==========================================================================================================
+
+- perubahan data do ke pending
+- edit data asli menjadi pending
+- buat tabel database baru : tb_pnd_do
+- keterangan status pada data do
+  1. AVAILABLE
+  2. DISABLE - MASUK LIST TMP PO
+  3. DATA TEREKAM
+  4. DISABLE - TMP PO PENDING
+  5. DISABLE - DRAFT PO PENDING
+- keterangan status barang pada preparation do
+  1. Data dapat dinput
+  2. Data telah terinput tmp
+  3. Data telah terinput faktur belum direkam
+  4. data telah terekam
