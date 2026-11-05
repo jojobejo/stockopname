@@ -9,6 +9,6 @@
 
     <!-- Right navbar links -->
     <ul class="navbar-nav ml-auto">
-      
+      <li class="nav-item"><button type="button" class="btn btn-sm btn-primary mt-1 mr-2" data-install-app>Pasang aplikasi</button></li>
   </nav>
   <!-- /.navbar -->

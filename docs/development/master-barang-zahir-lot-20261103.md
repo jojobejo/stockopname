@@ -12,6 +12,7 @@
 - Kartu ringkasan mengikuti tampilan master opname: **Total Data** dari kombinasi LOT Zahir berqty positif, **Total Barang Qty 0** dari master opname lokal (tautan ke halaman qty 0), **QR Code Selesai**, **QR Code Pending**, dan **Print Kartu Stock** untuk baris terpilih. Kartu QR gagal dan Print Preview Asset tidak ditampilkan. Kartu selesai/pending dapat memfilter tabel.
 - Tabel menampilkan 10 data per halaman; pilihan 10, 25, dan 50, dengan batas server 50 data per permintaan. Tidak ada pilihan menampilkan semua data.
 - Memilih baris menampilkan preview kartu stock di sisi tabel yang hanya berisi nama barang, QR barang, dan expired date. Location, nama gudang, kode barang, dimensi, inventory date, serta paraf dihilangkan dari preview cetak. Tombol **Cetak** aktif hanya saat file QR tersedia. QR barang berisi identitas barang; operator memilih lot/expired date setelah scan.
+- Jarak QR ke expired date pada preview ditambah dan QR diperbesar dari 160 px menjadi 320 px. Hasil cetak memakai QR 80 mm dan empat kartu per lembar A4. Kolom centang tersedia untuk QR yang sudah siap. Centang header memilih seluruh QR siap pada halaman yang sedang tampil; pilihan tetap tersimpan saat pindah halaman. **Cetak Tercentang** hanya mencetak pilihan, sedangkan **Cetak Semua QR Siap** mengambil seluruh QR siap dari daftar LOT berqty positif, melampaui halaman yang sedang tampil. Server memvalidasi kembali pilihan dan file QR sebelum menyajikan halaman cetak.
 
 ## Cara penggunaan
 
@@ -19,6 +20,7 @@
 2. Cari kode atau nama barang melalui kolom Cari. Pilih jumlah baris dan halaman sesuai kebutuhan.
 3. Tekan **Refresh** untuk mengambil perubahan terbaru dari ZahirDigital.
 4. Gunakan **Status QR** atau kartu ringkasan untuk melihat barang yang sudah atau belum memiliki QR siap cetak. Klik baris untuk preview kartu, lalu **Cetak**. Klik **Generate QR** jika belum ada; master lokal dibuat otomatis bila perlu. Tunggu alert, kemudian baris akan diperbarui otomatis.
+5. Untuk cetak banyak kartu, centang baris yang diinginkan atau gunakan centang header untuk memilih QR siap pada halaman tersebut. Klik **Cetak Tercentang**. Untuk seluruh kartu dengan QR siap dari semua halaman, klik **Cetak Semua QR Siap**. Halaman cetak menyediakan tombol Cetak browser.
 
 ## Konfigurasi operasional
 
@@ -27,3 +29,4 @@ Endpoint LOGISTIK tidak memerlukan kredensial HTTP Basic dari mesin stockopname.
 ## Verifikasi dan batasan
 
 PHP lint pada controller, model, view, konfigurasi, dan library berhasil; JavaScript view lolos pemeriksaan sintaks Node. Uji baca sumber HTML ZahirDigital terbaru dari PHP stockopname menghasilkan 2.105 kombinasi LOT dengan Qty Lot positif, semuanya memiliki P/L/T pada snapshot master barang aktif tersebut. Waktu baca sumber LOT pada uji ini sekitar 11 detik, dibanding sekitar 29 detik untuk endpoint JSON sebelumnya; cache yang sudah ada dibaca tanpa menunggu sumber. Pada pemeriksaan data lokal sebelum perubahan ini, belum ada path QR barang tersimpan; filter **Sudah digenerate** akan kosong sampai QR barang dibuat. UAT halaman dan POST generate QR dengan sesi admin belum dilakukan. Endpoint lama `master_barang/create` dan `master_barang/update` tetap ada untuk kompatibilitas pemanggil lain.
+Template cetak diuji secara read-only dengan lima kartu contoh dan menghasilkan dua lembar (empat kartu lalu satu kartu). UAT cetak browser dengan QR nyata dan sesi admin belum dilakukan.

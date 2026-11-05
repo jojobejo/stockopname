@@ -23,6 +23,13 @@ class RouterFixture {
     public $method = 'ajax_input_save';
     public function fetch_method() { return $this->method; }
 }
+class CatalogFixture {
+    public $rows = [['kode_barang'=>'A','nama_barang'=>'Barang','expired_date'=>'2027-01-01','dimensi'=>24]];
+    public function rows($refresh = false) { return ['status'=>true,'data'=>$this->rows]; }
+}
+class LoaderFixture {
+    public function library($name) {}
+}
 class StockFixture {
     public $writes = [];
     public $dimensi = 24;
@@ -30,7 +37,7 @@ class StockFixture {
     public function ensure_manual_tables() { return true; }
     public function wilayah_by_id($id) { return $id === 7 ? ['id'=>7] : null; }
     public function catalog_item($id = 0, $code = '') {
-        return ['barang_id'=>3,'kode_barang'=>$id === 99 ? 'OTHER' : 'A','nama_barang'=>'Barang','dimensi'=>$this->dimensi];
+        return $id === 99 ? null : ['barang_id'=>3,'kode_barang'=>'A','nama_barang'=>'Barang','dimensi'=>$this->dimensi];
     }
     public function get_master_barang_by_id($id) {
         return $id === 10 ? ['id'=>10,'kode_barang'=>'A','nama_barang'=>'Barang','no_lot'=>'LOT1','expired_date'=>'2027-01-01','dimensi'=>$this->dimensi] : null;
@@ -53,13 +60,21 @@ $controller->session = new SessionFixture();
 $controller->output = new OutputFixture();
 $controller->router = new RouterFixture();
 $controller->stockopname = new StockFixture();
-$valid = ['master_id'=>'10','barang_id'=>'3','qty_box'=>'3','qty_pcs'=>'5','wilayah'=>999,'tim_opname'=>2];
+$controller->load = new LoaderFixture();
+$controller->zahir_lot_catalog = new CatalogFixture();
+$valid = ['scan_value'=>'MB|3|2027-01-01','qty_box'=>'3','qty_pcs'=>'5','wilayah'=>999,'tim_opname'=>2];
+$controller->router->method = 'ajax_input_lookup';
+$controller->input->values = $valid;
+$controller->ajax_input_lookup();
+checkInput($controller->output->result['status'] && $controller->output->result['data']['expired_date'] === '2027-01-01', 'Scan menampilkan expired date dari Data Master Barang');
+$controller->router->method = 'ajax_input_save';
 $controller->input->values = $valid;
 $controller->ajax_input_save();
 $write = $controller->stockopname->writes[0];
 checkInput($controller->output->result['status'] && $write[2]['wilayah'] === 7 && $write[2]['tim_opname'] === 1, 'Tim/wilayah berasal dari akun, bukan manipulasi POST');
 checkInput($write[2]['input_source'] === 'scan_qrcode', 'Scan memiliki tipe input scan_qrcode');
-foreach ([['barang_id'=>'99'], ['master_id'=>'999'], ['qty_box'=>'-1'], ['qty_pcs'=>'1.5'], ['qty_box'=>'','qty_pcs'=>'']] as $invalid) {
+checkInput($write[1]['scan_code'] === $valid['scan_value'] && $write[1]['nama_barang'] === 'Barang', 'Data opname berasal dari QR dan Data Master Barang');
+foreach ([['scan_value'=>'BR|3'], ['scan_value'=>'MB|99|2027-01-01'], ['scan_value'=>'MB|3|2027-02-01'], ['qty_box'=>'-1'], ['qty_pcs'=>'1.5'], ['qty_box'=>'','qty_pcs'=>'']] as $invalid) {
     $controller->input->values = array_merge($valid, $invalid);
     $before = count($controller->stockopname->writes);
     $controller->ajax_input_save();
@@ -77,6 +92,16 @@ $controller->session->values['tim'] = 0;
 $controller->ajax_input_save();
 checkInput(!$controller->output->result['status'], 'Akun tanpa tim ditolak');
 $controller->session->values['tim'] = 1;
+$controller->input->values = ['manual_kode_barang'=>'A','manual_expired_id'=>'2027-01-01','qty_box'=>'1','qty_pcs'=>'2'];
+$controller->ajax_manual_save();
+$write = end($controller->stockopname->writes);
+checkInput($controller->output->result['status'] && $write[0] === 'manual' && $write[1]['expired_date'] === '2027-01-01', 'Input manual memakai expired date Data Master Barang');
+$controller->zahir_lot_catalog->rows[0]['nama_barang'] = 'Nama Berbeda';
+$controller->input->values = $valid;
+$before = count($controller->stockopname->writes);
+$controller->ajax_input_save();
+checkInput(!$controller->output->result['status'] && count($controller->stockopname->writes) === $before, 'Nama barang yang berubah pada master ditolak saat simpan');
+$controller->zahir_lot_catalog->rows[0]['nama_barang'] = 'Barang';
 $controller->input->values = ['request_kode_barang'=>'A','request_no_lot'=>'LOT-BARU','request_expired_date'=>'01/02/2027','qty_box'=>'1','qty_pcs'=>'2'];
 $controller->ajax_request_save();
 $write = end($controller->stockopname->writes);

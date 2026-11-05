@@ -63,8 +63,7 @@
 
                     <form id="formInputOpname">
                         <input type="hidden" name="input_mode" id="inputMode" value="scan">
-                        <input type="hidden" name="master_id" id="masterId"><input type="hidden" name="barang_id" id="scanBarangId">
-                        <input type="hidden" name="manual_source_id" id="manualSourceId">
+                        <input type="hidden" name="scan_value" id="scanValue">
                         <div class="so-panel mb-3">
                             <div class="so-panel-header">
                                 <h2 class="so-panel-title">Kartu Stock</h2>
@@ -76,8 +75,12 @@
                                         <div id="itemName">-</div>
                                     </div>
                                     <div class="so-readonly full">
+                                        <label>Kode Barang</label>
+                                        <div id="itemCode">-</div>
+                                    </div>
+                                    <div class="so-readonly full">
                                         <label>Expired Date</label>
-                                        <div id="itemExpired">-</div><select class="form-control" id="scanLot"><option value="">Scan barang dahulu</option></select><small>Lot belum tersedia? Gunakan Opname Request.</small>
+                                        <div id="itemExpired">-</div>
                                     </div>
                                 </div>
                                 <div class="so-manual-form" id="manualStockView">
@@ -86,7 +89,7 @@
                                         <select class="form-control" id="manualBarang" name="manual_kode_barang"></select>
                                     </div>
                                     <div class="form-group mb-0">
-                                        <label>Nomor Lot / Expired Date</label>
+                                        <label>Expired Date Data Master Barang</label>
                                         <select class="form-control" id="manualExpired" name="manual_expired_id" disabled>
                                             <option value="">Pilih nama barang dahulu</option>
                                         </select>
@@ -214,31 +217,19 @@ window.addEventListener('load', function () {
     }
 
     function fillItem(row) {
-        $('#masterId,#manualSourceId').val('');
-        $('#scanBarangId').val(row.barang_id || '');
         $('#itemName').text(row.nama_barang || '-');
-        $('#itemExpired').text('Pilih nomor lot / expired');
+        $('#itemCode').text(row.kode_barang || '-');
+        $('#itemExpired').text(formatExpiredDate(row.expired_date));
         selectedDimensi = parseInt(row.dimensi || 0, 10) || 0;
-        var select = $('#scanLot').empty().append(new Option('Pilih nomor lot / expired', ''));
-        (row.lots || []).forEach(function (lot) {
-            select.append(new Option((lot.no_lot || '-') + ' / ' + formatExpiredDate(lot.expired_date), lot.id));
-        });
-        if (!(row.lots || []).length) toast('warning', 'Lot belum tersedia. Gunakan Opname Request.');
         updateDimensiView();
         updateQtyTotal();
-        $('#btnSaveOpname').prop('disabled', true);
+        $('#btnSaveOpname').prop('disabled', !$('#scanValue').val());
     }
-    $('#scanLot').on('change', function () {
-        $('#masterId').val($(this).val() || '');
-        $('#btnSaveOpname').prop('disabled', !$(this).val());
-    });
 
     function resetAfterSave() {
         $('#formInputOpname')[0].reset();
-        $('#masterId,#scanBarangId').val('');
-        $('#scanLot').empty().append(new Option('Scan barang dahulu', ''));
-        $('#manualSourceId').val('');
-        $('#itemName,#itemExpired').text('-');
+        $('#scanValue').val('');
+        $('#itemName,#itemCode,#itemExpired').text('-');
         $('#manualBarang').val(null).trigger('change');
         $('#requestBarang').val(null).trigger('change');
         $('#requestExpiredView').val('');
@@ -264,8 +255,7 @@ window.addEventListener('load', function () {
 
     function setInputMode(mode) {
         if (inputMode !== mode) {
-            $('#masterId,#scanBarangId,#manualSourceId').val('');
-            $('#scanLot').empty().append(new Option('Scan barang dahulu', ''));
+            $('#scanValue').val('');
             $('#manualBarang,#requestBarang').val(null).trigger('change');
             $('#requestNoLot,#requestExpiredView').val('');
         }
@@ -279,8 +269,8 @@ window.addEventListener('load', function () {
             $('#btnManualMode').removeClass('btn-outline-primary').addClass('btn-primary');
             $('#btnScan').removeClass('btn-primary').addClass('btn-outline-primary').html('<i class="fas fa-qrcode"></i>Scan');
             $('#btnRequestMode').removeClass('btn-warning').addClass('btn-outline-warning');
-            $('#masterId').val('');
-            $('#itemName,#itemExpired').text('-');
+            $('#scanValue').val('');
+            $('#itemName,#itemCode,#itemExpired').text('-');
             selectedDimensi = 0;
             updateDimensiView();
             updateQtyTotal();
@@ -295,8 +285,8 @@ window.addEventListener('load', function () {
             $('#btnRequestMode').removeClass('btn-outline-warning').addClass('btn-warning');
             $('#btnScan').removeClass('btn-primary').addClass('btn-outline-primary').html('<i class="fas fa-qrcode"></i>Scan');
             $('#btnManualMode').removeClass('btn-primary').addClass('btn-outline-primary');
-            $('#masterId,#manualSourceId').val('');
-            $('#itemName,#itemExpired').text('-');
+            $('#scanValue').val('');
+            $('#itemName,#itemCode,#itemExpired').text('-');
             selectedDimensi = 0;
             updateDimensiView();
             updateQtyTotal();
@@ -309,8 +299,7 @@ window.addEventListener('load', function () {
         $('#btnScan').removeClass('btn-outline-primary').addClass('btn-primary');
         $('#btnManualMode').removeClass('btn-primary').addClass('btn-outline-primary');
         $('#btnRequestMode').removeClass('btn-warning').addClass('btn-outline-warning');
-        $('#manualSourceId').val('');
-        $('#btnSaveOpname').prop('disabled', !$('#masterId').val());
+        $('#btnSaveOpname').prop('disabled', !$('#scanValue').val());
     }
 
     function resetManualLot(text) {
@@ -319,7 +308,6 @@ window.addEventListener('load', function () {
 
     function resetManualExpired(text) {
         $('#manualExpired').prop('disabled', true).empty().append(new Option(text || 'Pilih expired date', '', true, true)).trigger('change');
-        $('#manualSourceId').val('');
         selectedDimensi = 0;
         updateDimensiView();
         updateQtyTotal();
@@ -328,7 +316,7 @@ window.addEventListener('load', function () {
 
     function validateManualReady() {
         if (inputMode !== 'manual') return;
-        $('#btnSaveOpname').prop('disabled', !$('#manualSourceId').val());
+        $('#btnSaveOpname').prop('disabled', !$('#manualExpired').val());
     }
 
     function requestExpiredStorageValue() {
@@ -361,7 +349,7 @@ window.addEventListener('load', function () {
         var $expired = $('#manualExpired');
         $expired.empty().append(new Option('Pilih expired date', '', true, true));
         $.each(rows || [], function (_, row) {
-            var option = new Option((row.no_lot || '-') + ' / ' + formatExpiredDate(row.expired_date), row.id, false, false);
+            var option = new Option(formatExpiredDate(row.expired_date), row.id, false, false);
             $(option).attr('data-dimensi', row.dimensi || 0);
             $expired.append(option);
         });
@@ -375,8 +363,10 @@ window.addEventListener('load', function () {
             return;
         }
         if (lookupBusy) return;
+        if (inputMode !== 'scan') setInputMode('scan');
         lookupBusy = true;
-        $('#masterId,#scanBarangId').val('');
+        $('#scanValue').val('');
+        $('#itemName,#itemCode,#itemExpired').text('-');
         $('#btnSaveOpname').prop('disabled', true);
         setScannerStatus('Mencari');
         $.ajax({
@@ -391,6 +381,7 @@ window.addEventListener('load', function () {
                     setScannerStatus('');
                     return;
                 }
+                $('#scanValue').val(value);
                 fillItem(res.data || {});
                 $('#manualScanValue').val(value);
                 toast('success', res.message || 'Data berhasil diisi');
@@ -515,7 +506,6 @@ window.addEventListener('load', function () {
 
     $('#manualExpired').on('change', function () {
         var selected = $(this).find(':selected');
-        $('#manualSourceId').val($(this).val() || '');
         selectedDimensi = parseInt(selected.attr('data-dimensi') || 0, 10) || 0;
         updateDimensiView();
         updateQtyTotal();

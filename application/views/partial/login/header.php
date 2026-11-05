@@ -5,6 +5,10 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="icon" href="<?php echo base_url("assets/images/Karisma.png") ?>">
+    <link rel="manifest" href="<?= base_url('app.webmanifest') ?>">
+    <link rel="apple-touch-icon" href="<?= base_url('assets/images/app-icon-192.png') ?>">
+    <meta name="theme-color" content="#164a8a">
+    <meta name="apple-mobile-web-app-capable" content="yes">
     <title>PT.KARISMA INDOAGRO UNIVERSAL</title>
 
     <!-- Google Font: Source Sans Pro -->

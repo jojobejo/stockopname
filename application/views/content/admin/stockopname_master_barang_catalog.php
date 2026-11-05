@@ -1,4 +1,6 @@
 <?php defined('BASEPATH') or exit('No direct script access allowed'); ?>
+<?php $embedded = !empty($embedded); ?>
+<?php if (!$embedded): ?>
 <body class="hold-transition sidebar-mini sidebar-collapse">
 <div class="wrapper">
     <?php $this->load->view('partial/main/navbar') ?>
@@ -9,11 +11,14 @@
             <a href="<?= base_url('admin/stockopname/master_opname') ?>" class="btn btn-outline-secondary btn-sm"><i class="fas fa-arrow-left"></i> Master Opname</a>
         </div></section>
         <section class="content"><div class="container-fluid">
+<?php else: ?>
+        <section class="content pt-3"><div class="container-fluid">
+<?php endif; ?>
             <div class="row catalog-stats">
-                <div class="col-12 col-md-6 col-xl-3 mb-3"><button type="button" class="catalog-stat" data-status=""><span>Total Data</span><strong id="catalogTotal">0</strong><small>Sumber: LOT Zahir, Qty Lot positif</small></button></div>
+                <div class="col-12 col-md-6 col-xl-3 mb-3"><button type="button" class="catalog-stat" data-status=""><span>Total Data</span><strong id="catalogTotal">0</strong><small>Kelompok nama dan expired date</small></button></div>
                 <div class="col-12 col-md-6 col-xl-3 mb-3"><a class="catalog-stat" href="<?= base_url('admin/stockopname/master_opname/qty-zero') ?>"><span>Total Barang Qty 0</span><strong id="catalogQtyZero">0</strong><small>Master opname lokal · lihat data qty 0</small></a></div>
-                <div class="col-12 col-md-6 col-xl-3 mb-3"><button type="button" class="catalog-stat" data-status="generated"><span>QR Code Selesai</span><strong id="catalogQrDone">0</strong><small>Klik untuk filter sudah digenerate</small></button></div>
-                <div class="col-12 col-md-6 col-xl-3 mb-3"><button type="button" class="catalog-stat" data-status="not_generated"><span>QR Code Pending</span><strong id="catalogQrPending">0</strong><small>Klik untuk filter belum digenerate</small></button></div>
+                <div class="col-12 col-md-6 col-xl-3 mb-3"><button type="button" class="catalog-stat" data-status="generated"><span>QR Code Selesai</span><strong id="catalogQrDone">0</strong><small>Jumlah kode siap · filter grup selesai</small></button></div>
+                <div class="col-12 col-md-6 col-xl-3 mb-3"><button type="button" class="catalog-stat" data-status="not_generated"><span>QR Code Pending</span><strong id="catalogQrPending">0</strong><small>Jumlah kode pending · filter grup pending</small></button></div>
                 <div class="col-12 col-md-6 col-xl-3 mb-3"><button type="button" class="catalog-print" id="printStockCardWidget" disabled><i class="fas fa-id-card"></i><strong>Print Kartu Stock</strong><small>Cetak kartu barang terpilih</small></button></div>
             </div>
             <div class="row"><div class="col-lg-8 mb-3"><div class="card h-100">
@@ -23,7 +28,7 @@
             </div>
             <div class="card-body">
                 <div id="masterBarangError" class="alert alert-danger" role="alert" style="display:none"></div>
-                <p class="text-muted">Hanya barang dengan total Qty Lot lebih dari 0. Satu baris untuk setiap kombinasi kode barang, nama barang, dan expired date.</p>
+                <p class="text-muted">Hanya barang dengan total Qty Lot lebih dari 0. Satu baris untuk setiap nama barang dan expired date. Bila kode barang lebih dari satu, semua kode ditampilkan dan QR tetap dibuat per kode.</p>
                 <div class="form-group d-flex align-items-center flex-wrap" style="gap:8px">
                     <label for="filterQrStatus" class="mb-0">Status QR</label>
                     <select id="filterQrStatus" class="form-control form-control-sm" style="max-width:210px">
@@ -33,18 +38,23 @@
                     <button type="button" class="btn btn-primary btn-sm" id="printAllCards" disabled>Cetak Semua QR Siap (<span id="allReadyCount">0</span>)</button>
                 </div>
                 <div class="table-responsive"><table id="tableMasterBarangZahir" class="table table-bordered table-striped table-hover w-100">
-                    <thead><tr><th><input type="checkbox" id="selectPageCards" title="Centang semua QR siap di halaman ini" aria-label="Centang semua QR siap di halaman ini"></th><th>Kode Barang</th><th>Nama Barang</th><th>Expired Date</th><th>P</th><th>L</th><th>T</th><th>Dimensi</th><th>QR Code</th><th>Status QR</th></tr></thead><tbody></tbody>
+                    <thead><tr><th><input type="checkbox" id="selectPageCards" title="Centang semua QR siap di halaman ini" aria-label="Centang semua QR siap di halaman ini"></th><th>Kode Barang</th><th>Nama Barang</th><th>Expired Date</th><th>P</th><th>L</th><th>T</th><th>Dimensi</th><th>Aksi QR</th><th>Status QR</th></tr></thead><tbody></tbody>
                 </table></div>
             </div>
         </div></div><div class="col-lg-4 mb-3"><div class="card h-100" style="position:sticky;top:12px">
             <div class="card-header d-flex justify-content-between align-items-center"><span>Preview Cetak Kartu Stock</span><button type="button" class="btn btn-success btn-sm" id="printStockCard" disabled><i class="fas fa-print"></i> Cetak</button></div>
-            <div class="card-body"><p class="text-muted small">Pilih baris barang untuk melihat kartu. QR barang digunakan untuk memilih lot dan expired date saat scan.</p>
+            <div class="card-body"><p class="text-muted small">Pilih baris barang untuk melihat kartu. QR memuat kode barang dan expired date; scan menampilkan nama dan tanggal dari Data Master Barang.</p>
                 <div id="previewStockCard" class="stock-card-preview"><div class="text-muted text-center p-4">Pilih barang dari tabel.</div></div>
             </div>
-        </div></div></div></div></section>
+        </div></div></div></div>
+<?php if (!$embedded): ?>
+        </section>
     </div>
     <footer class="main-footer"><strong>Copyright &copy; 2022 <a href="https://kiu.co.id">PT.KARISMA INDOARGO UNIVERSAL</a>.</strong></footer>
 </div>
+<?php else: ?>
+        </div></section>
+<?php endif; ?>
 <style>
     .catalog-stat{width:100%;min-height:112px;display:flex;flex-direction:column;align-items:flex-start;text-align:left;padding:16px;border:1px solid #dfe5ec;border-left:4px solid #0f766e;border-radius:8px;background:#fff;color:#172033;text-decoration:none;cursor:pointer}
     .catalog-stat:hover,.catalog-stat.active{border-color:#0f766e;color:#172033;text-decoration:none;box-shadow:0 0 0 3px rgba(15,118,110,.12)}
@@ -56,13 +66,14 @@
     .stock-card-preview .stock-card-qr{height:340px;display:flex;align-items:center;justify-content:center;margin-bottom:24px}
     .stock-card-preview .stock-card-qr img{width:320px;height:320px;object-fit:contain}
     .stock-card-preview .stock-card-foot{border-top:1px solid #111827;padding:12px;font-size:14px;font-weight:700}
-    @media print{body *{visibility:hidden!important}#previewStockCard,#previewStockCard *{visibility:visible!important}#previewStockCard{position:absolute;left:0;top:0;width:96mm;max-width:none}}
+    @media print{body *{visibility:hidden!important}#previewStockCard,#previewStockCard *{visibility:visible!important}#previewStockCard label{display:none!important}#previewStockCard{position:absolute;left:0;top:0;width:96mm;max-width:none}}
 </style>
 <script>
 window.addEventListener('load', function () {
     var refreshBusy = false;
     var autoRefreshAttempted = false;
     var selectedRow = null;
+    var selectedVariant = null;
     var selectedCards = {};
     var readyCount = 0;
     var listUrl = '<?= base_url('admin/stockopname/master_barang/list') ?>';
@@ -76,6 +87,8 @@ window.addEventListener('load', function () {
     function formatDate(value) { var p = String(value || '').split('-'); return p.length === 3 ? p[2] + '/' + p[1] + '/' + p[0] : (value || '-'); }
     function cardValues(row) { return [row.kode_barang, row.nama_barang, row.expired_date]; }
     function cardKey(row) { return JSON.stringify(cardValues(row)); }
+    function readyVariants(row) { return (row.variants || []).filter(function (variant) { return !!variant.qrcode_url; }); }
+    function groupKey(row) { return JSON.stringify([row.nama_barang, row.expired_date]); }
     function updateSelectionUi(api) {
         api = api || table;
         var count = Object.keys(selectedCards).length;
@@ -83,8 +96,8 @@ window.addEventListener('load', function () {
         $('#printSelectedCards,#printStockCardWidget').prop('disabled', count === 0);
         $('#allReadyCount').text(readyCount);
         $('#printAllCards').prop('disabled', readyCount === 0);
-        var current = api.rows({page: 'current'}).data().toArray().filter(function (row) { return !!row.qrcode_url; });
-        var checked = current.filter(function (row) { return !!selectedCards[cardKey(row)]; }).length;
+        var current = api.rows({page: 'current'}).data().toArray().filter(function (row) { return readyVariants(row).length > 0; });
+        var checked = current.filter(function (row) { return readyVariants(row).every(function (variant) { return !!selectedCards[cardKey(variant)]; }); }).length;
         $('#selectPageCards').prop('checked', current.length > 0 && checked === current.length)
             .prop('indeterminate', checked > 0 && checked < current.length)
             .prop('disabled', current.length === 0);
@@ -99,14 +112,27 @@ window.addEventListener('load', function () {
         form.trigger('submit');
         form.remove();
     }
-    function renderPreview(row) {
+    function renderPreview(row, variant) {
         selectedRow = row;
-        var qr = row.qrcode_url ? '<img src="' + esc(row.qrcode_url) + '" alt="QR barang">' : '<span class="text-muted">QR Code belum digenerate</span>';
-        $('#previewStockCard').html('<div class="stock-card-name">' + esc(row.nama_barang) + '</div>' +
+        variant = variant || (selectedVariant && (row.variants || []).filter(function (item) { return item.kode_barang === selectedVariant.kode_barang; })[0])
+            || readyVariants(row)[0] || row.variants[0];
+        selectedVariant = variant;
+        var qr = variant.qrcode_url ? '<img src="' + esc(variant.qrcode_url) + '" alt="QR barang">' : '<span class="text-muted">QR Code belum digenerate</span>';
+        var options = (row.variants || []).map(function (item) {
+            return '<option value="' + esc(item.kode_barang) + '"' + (item.kode_barang === variant.kode_barang ? ' selected' : '') + '>' + esc(item.kode_barang) + (item.qrcode_url ? '' : ' · QR belum dibuat') + '</option>';
+        }).join('');
+        $('#previewStockCard').html((row.variants.length > 1 ? '<label class="d-block p-2 mb-0">Kode barang <select id="previewCardCode" class="form-control form-control-sm">' + options + '</select></label>' : '') +
+            '<div class="stock-card-name">' + esc(row.nama_barang) + '</div>' +
             '<div class="stock-card-qr">' + qr + '</div>' +
             '<div class="stock-card-foot">EXPIRED DATE : ' + esc(formatDate(row.expired_date)) + '</div>');
-        $('#printStockCard').prop('disabled', !row.qrcode_url);
+        $('#printStockCard').prop('disabled', !variant.qrcode_url);
     }
+    $('#previewStockCard').on('change', '#previewCardCode', function () {
+        if (!selectedRow) { return; }
+        var code = $(this).val();
+        var variant = selectedRow.variants.filter(function (item) { return item.kode_barang === code; })[0];
+        if (variant) { renderPreview(selectedRow, variant); }
+    });
     $.fn.dataTable.ext.errMode = 'none';
     var table = $('#tableMasterBarangZahir').DataTable({
         processing: true, serverSide: true, searching: true, ordering: false,
@@ -142,9 +168,10 @@ window.addEventListener('load', function () {
         columns: [
             {data: null, orderable: false, searchable: false, render: function (value, type, row) {
                 if (type !== 'display') { return ''; }
-                var key = cardKey(row);
-                return '<input type="checkbox" class="select-stock-card" aria-label="Pilih kartu ' + esc(row.kode_barang) + '" data-key="' + esc(key) + '"' +
-                    (selectedCards[key] ? ' checked' : '') + (row.qrcode_url ? '' : ' disabled title="Generate QR dahulu"') + '>';
+                var ready = readyVariants(row);
+                var checked = ready.length > 0 && ready.every(function (variant) { return !!selectedCards[cardKey(variant)]; });
+                return '<input type="checkbox" class="select-stock-card" aria-label="Pilih kartu ' + esc(row.kode_barang) + '"' +
+                    (checked ? ' checked' : '') + (ready.length ? '' : ' disabled title="Generate QR dahulu"') + '>';
             }},
             {data: 'kode_barang', render: $.fn.dataTable.render.text()},
             {data: 'nama_barang', render: $.fn.dataTable.render.text()},
@@ -159,24 +186,27 @@ window.addEventListener('load', function () {
             {data: 't', render: displayNumber}, {data: 'dimensi', render: displayNumber},
             {data: null, render: function (value, type, row) {
                 if (type !== 'display') { return row.qrcode_status; }
-                if (row.qrcode_url) { return '<img src="' + esc(row.qrcode_url) + '" alt="QR barang" width="48" height="48">'; }
-                return '<button type="button" class="btn btn-outline-primary btn-xs generate-catalog-qr" data-id="' + esc(row.catalog_id || '') + '" data-code="' + esc(row.kode_barang) + '" data-name="' + esc(row.nama_barang) + '" data-expired="' + esc(row.expired_date) + '">Generate QR</button>';
+                return row.variants.map(function (variant) {
+                    if (variant.qrcode_url) { return '<div class="text-muted small">' + esc(variant.kode_barang) + ': siap</div>'; }
+                    return '<button type="button" class="btn btn-outline-primary btn-xs generate-catalog-qr m-1" data-id="' + esc(variant.catalog_id || '') + '" data-code="' + esc(variant.kode_barang) + '" data-name="' + esc(variant.nama_barang) + '" data-expired="' + esc(variant.expired_date) + '">Generate ' + esc(variant.kode_barang) + '</button>';
+                }).join('');
             }},
             {data: 'qrcode_status', render: function (value, type, row) {
                 if (type !== 'display') { return value; }
-                return value === 'generated' ? '<span class="badge badge-success">Sudah digenerate</span>' :
-                    '<span class="badge badge-secondary">Belum digenerate</span>';
+                if (value === 'generated') { return '<span class="badge badge-success">Semua QR siap</span>'; }
+                if (value === 'partial') { return '<span class="badge badge-warning">Sebagian QR siap</span>'; }
+                return '<span class="badge badge-secondary">Belum digenerate</span>';
             }}
         ],
         drawCallback: function () {
             var matched = false;
             this.api().rows({page: 'current'}).every(function () {
                 var row = this.data();
-                var active = selectedRow && row.kode_barang === selectedRow.kode_barang && row.nama_barang === selectedRow.nama_barang && row.expired_date === selectedRow.expired_date;
+                var active = selectedRow && groupKey(row) === groupKey(selectedRow);
                 $(this.node()).toggleClass('selected', !!active);
                 if (active) { matched = true; renderPreview(row); }
             });
-            if (!matched) { selectedRow = null; $('#previewStockCard').html('<div class="text-muted text-center p-4">Pilih barang dari tabel.</div>'); $('#printStockCard,#printStockCardWidget').prop('disabled', true); }
+            if (!matched) { selectedRow = null; selectedVariant = null; $('#previewStockCard').html('<div class="text-muted text-center p-4">Pilih barang dari tabel.</div>'); $('#printStockCard').prop('disabled', true); }
             updateSelectionUi(this.api());
         },
         language: {
@@ -205,20 +235,25 @@ window.addEventListener('load', function () {
     });
     $('#tableMasterBarangZahir tbody').on('change', '.select-stock-card', function () {
         var row = table.row($(this).closest('tr')).data();
-        if (!row || !row.qrcode_url) { return; }
-        var key = cardKey(row);
-        if (this.checked) { selectedCards[key] = cardValues(row); }
-        else { delete selectedCards[key]; }
+        if (!row) { return; }
+        var checked = this.checked;
+        readyVariants(row).forEach(function (variant) {
+            var key = cardKey(variant);
+            if (checked) { selectedCards[key] = cardValues(variant); }
+            else { delete selectedCards[key]; }
+        });
         updateSelectionUi();
     });
     $('#selectPageCards').on('change', function () {
         var checked = this.checked;
         table.rows({page: 'current'}).every(function () {
             var row = this.data();
-            if (!row.qrcode_url) { return; }
-            var key = cardKey(row);
-            if (checked) { selectedCards[key] = cardValues(row); }
-            else { delete selectedCards[key]; }
+            if (!readyVariants(row).length) { return; }
+            readyVariants(row).forEach(function (variant) {
+                var key = cardKey(variant);
+                if (checked) { selectedCards[key] = cardValues(variant); }
+                else { delete selectedCards[key]; }
+            });
             $(this.node()).find('.select-stock-card').prop('checked', checked);
         });
         updateSelectionUi();
@@ -236,7 +271,7 @@ window.addEventListener('load', function () {
             .fail(function (xhr) { alertMessage('error', (xhr.responseJSON && xhr.responseJSON.message) || 'Server gagal generate QR Code.'); })
             .always(function () { button.prop('disabled', false).text('Generate QR'); });
     });
-    $('#printStockCard').on('click', function () { if (selectedRow && selectedRow.qrcode_url) { submitPrint('selected', [cardValues(selectedRow)]); } });
+    $('#printStockCard').on('click', function () { if (selectedVariant && selectedVariant.qrcode_url) { submitPrint('selected', [cardValues(selectedVariant)]); } });
     $('#printStockCardWidget,#printSelectedCards').on('click', function () {
         var values = Object.keys(selectedCards).map(function (key) { return selectedCards[key]; });
         if (values.length) { submitPrint('selected', values); }

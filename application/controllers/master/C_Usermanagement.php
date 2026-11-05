@@ -18,6 +18,10 @@ class C_Usermanagement extends CI_Controller
         if (!$this->session->userdata('logged_in')) {
             redirect('Auth');
         }
+        $username = strtolower(trim((string)$this->session->userdata('username')));
+        if (!in_array($username, ['admin', 'admin1'], true)) {
+            show_error('Anda tidak memiliki akses ke halaman ini.', 403);
+        }
         $this->permission->guard('master/user-management');
     }
 

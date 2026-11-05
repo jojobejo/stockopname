@@ -1,0 +1,39 @@
+{
+    "master_ids": {
+        "AALUF01": 1,
+        "AAMOL01": 2
+    },
+    "pending_id": 210,
+    "rows": [
+        {
+            "id": "1",
+            "kode_barang": "AALUF01",
+            "nama_barang": "Alufos Agro 56 TB 42 X 90 gr*",
+            "expired_date": "2031-04-01",
+            "no_lot": "-",
+            "dimensi": "42",
+            "qty": "210",
+            "qty_box": "5",
+            "qty_pcs": "0",
+            "pending_qty": "49",
+            "pending_box": "1",
+            "pending_pcs": "7",
+            "qty_sistem": "259"
+        },
+        {
+            "id": "2",
+            "kode_barang": "AAMOL01",
+            "nama_barang": "Amolin 300 EC 100 X 100 ml",
+            "expired_date": "2028-01-01",
+            "no_lot": "-",
+            "dimensi": "100",
+            "qty": "315",
+            "qty_box": "3",
+            "qty_pcs": "15",
+            "pending_qty": "0",
+            "pending_box": "0",
+            "pending_pcs": "0",
+            "qty_sistem": "315"
+        }
+    ]
+}

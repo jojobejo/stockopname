@@ -1,0 +1,47 @@
+{
+    "mode": "apply",
+    "master_barang": [
+        {
+            "id": "5917",
+            "kd_barang": "AALUF01",
+            "nama_barang": "Alufos Agro 56 TB 42 X 90 gr*",
+            "dimensi": "42"
+        },
+        {
+            "id": "41",
+            "kd_barang": "AAMOL01",
+            "nama_barang": "Amolin 300 EC 100 X 100 ml",
+            "dimensi": "100"
+        }
+    ],
+    "existing_master": 0,
+    "existing_pending": 0,
+    "new_master": [
+        [
+            "AALUF01",
+            "Alufos Agro 56 TB 42 X 90 gr*",
+            42,
+            "2031-04-01",
+            210,
+            5,
+            0
+        ],
+        [
+            "AAMOL01",
+            "Amolin 300 EC 100 X 100 ml",
+            100,
+            "2028-01-01",
+            315,
+            3,
+            15
+        ]
+    ],
+    "new_pending": {
+        "kode_barang": "AALUF01",
+        "expired_date": "2031-04-01",
+        "no_lot": "-",
+        "qty_box": 1,
+        "qty_pcs": 7,
+        "qty": 49
+    }
+}

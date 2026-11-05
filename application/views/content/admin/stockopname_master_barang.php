@@ -31,9 +31,9 @@ $qtyZeroCount = (int)($qty_zero_count ?? 0);
                         <a href="<?= base_url('admin/stockopname/input') ?>" class="btn btn-success btn-sm">
                             <i class="fas fa-mobile-alt"></i> Input Opname
                         </a>
-                        <a href="<?= base_url('admin/stockopname/master_barang') ?>" class="btn btn-outline-primary btn-sm">
-                            <i class="fas fa-cubes"></i> Master Barang
-                        </a>
+                        <?php if ($showQtyZeroWidget) : ?>
+                            <a href="<?= base_url('admin/stockopname/master_opname') ?>#data-master-barang" class="btn btn-outline-primary btn-sm"><i class="fas fa-cubes"></i> Master Barang</a>
+                        <?php endif; ?>
                         <?php if (!$showQtyZeroWidget) : ?>
                             <a href="<?= base_url('admin/stockopname/master_opname') ?>" class="btn btn-outline-primary btn-sm">
                                 <i class="fas fa-boxes"></i> Qty Aktif
@@ -50,7 +50,14 @@ $qtyZeroCount = (int)($qty_zero_count ?? 0);
             </div>
         </section>
 
-        <section class="content"><div class="alert alert-info mx-3">QR kini menggunakan identitas barang. <a href="<?= base_url('admin/stockopname/master_barang') ?>">Buka Master Barang untuk generate dan cetak QR.</a></div>
+        <?php if ($showQtyZeroWidget) : ?>
+        <nav class="px-3" aria-label="Data master stock opname"><ul class="nav nav-tabs" id="masterDataTabs" role="tablist">
+            <li class="nav-item"><a class="nav-link active" id="tab-master-opname" data-toggle="tab" href="#data-master-opname" role="tab" aria-controls="data-master-opname" aria-selected="true">Data Master Opname</a></li>
+            <li class="nav-item"><a class="nav-link" id="tab-master-barang" data-toggle="tab" href="#data-master-barang" role="tab" aria-controls="data-master-barang" aria-selected="false">Data Master Barang</a></li>
+        </ul></nav>
+        <div class="tab-content"><div class="tab-pane fade show active" id="data-master-opname" role="tabpanel" aria-labelledby="tab-master-opname">
+        <?php endif; ?>
+        <section class="content"><div class="alert alert-info mx-3">QR barang yang sudah dibuat ditampilkan pada preview sesuai kode barang; expired date dan lot mengikuti baris master opname. <a href="<?= base_url('admin/stockopname/master_opname') ?>#data-master-barang">Buka tab Data Master Barang untuk generate dan cetak QR.</a></div>
             <div class="container-fluid">
                 <style>
                     .master-barang-page{background:#f5f7fb}.mb-panel{background:#fff;border:1px solid #e1e7ef;border-radius:8px;box-shadow:0 8px 22px rgba(16,24,40,.06)}
@@ -84,19 +91,19 @@ $qtyZeroCount = (int)($qty_zero_count ?? 0);
                     <?php endif; ?>
                     <div class="col-12 col-md-6 col-xl-3 mb-3">
                         <button type="button" class="mb-stat filter-card" data-qrcode-status="generated">
-                            <div class="mb-stat-label">QR Code Selesai</div>
+                            <div class="mb-stat-label">QR Barang Tersedia</div>
                             <div class="mb-stat-value" id="qrDoneItem">0</div>
-                            <div class="mb-stat-meta">Klik untuk filter DONE</div>
+                            <div class="mb-stat-meta">Klik untuk filter QR barang yang sudah dibuat</div>
                         </button>
                     </div>
                     <div class="col-12 col-md-6 col-xl-3 mb-3">
                         <button type="button" class="mb-stat filter-card" data-qrcode-status="pending">
-                            <div class="mb-stat-label">QR Code Pending</div>
+                            <div class="mb-stat-label">QR Barang Belum Ada</div>
                             <div class="mb-stat-value" id="qrPendingItem">0</div>
-                            <div class="mb-stat-meta">Klik untuk filter PENDING</div>
+                            <div class="mb-stat-meta">Klik untuk filter QR barang yang belum dibuat</div>
                         </button>
                     </div>
-                    <div class="col-12 col-md-6 col-xl-3 mb-3">
+                    <div class="col-12 col-md-6 col-xl-3 mb-3" style="display:none">
                         <button type="button" class="mb-stat filter-card" data-qrcode-status="failed">
                             <div class="mb-stat-label">QR Code Gagal</div>
                             <div class="mb-stat-value" id="qrFailedItem">0</div>
@@ -179,7 +186,7 @@ $qtyZeroCount = (int)($qty_zero_count ?? 0);
                             <div class="mb-panel-header">
                                 <h2 class="mb-panel-title"><?= html_escape($tableTitle) ?></h2>
                                 <div class="mb-filter">
-                                    <input type="search" class="form-control form-control-sm" id="mbSearch" placeholder="Cari nama, expired date, no lot">
+                            <input type="search" class="form-control form-control-sm" id="mbSearch" placeholder="Cari nama, kode, expired date">
                                     <button type="button" class="btn btn-outline-secondary btn-sm" id="mbReset"><i class="fas fa-undo"></i>Reset</button>
                                     <?php if ($showStockCardRangePrint) : ?>
                                         <label class="mb-select-filter" title="Centang seluruh barang aktif yang memiliki Qty Pcs lebih dari 0">
@@ -193,16 +200,16 @@ $qtyZeroCount = (int)($qty_zero_count ?? 0);
                                 </div>
                             </div>
                             <div class="mb-table-wrap">
+                                <div class="alert alert-warning py-2 d-none" id="masterSyncNotice" role="status"></div>
                                 <table class="table table-sm table-hover table-bordered w-100" id="tableMasterBarang">
                                     <thead>
                                         <tr>
                                             <th>Nama Barang</th>
                                             <th>Expired Date</th>
-                                            <th>No Lot</th>
                                             <th>Qty</th>
                                             <th>Qty Pcs</th>
                                             <th>Qty Box</th><th>Qty Pending</th><th>Pending Box</th><th>Pending Pcs</th>
-                                            <th>#</th>
+                                            <th># Status Master Barang</th>
                                             <?php if ($showStockCardRangePrint) : ?>
                                                 <th>Pilih</th>
                                             <?php endif; ?>
@@ -232,6 +239,11 @@ $qtyZeroCount = (int)($qty_zero_count ?? 0);
                 </div>
             </div>
         </section>
+        <?php if ($showQtyZeroWidget) : ?>
+        </div><div class="tab-pane fade" id="data-master-barang" role="tabpanel" aria-labelledby="tab-master-barang">
+            <?php $this->load->view('content/admin/stockopname_master_barang_catalog.php', ['embedded' => true]); ?>
+        </div></div>
+        <?php endif; ?>
     </div>
 
     <div class="modal fade" id="modalTambahMaster" tabindex="-1" role="dialog" aria-labelledby="modalTambahMasterTitle" aria-hidden="true">
@@ -286,6 +298,7 @@ window.addEventListener('load', function () {
     $('#btnGenerateQrBatch').closest('.mb-panel').hide();
     $('#btnGenerateQrBatch,#btnRetryFailedQr,#btnResetQrOpname').hide();
     var qrcodeStatus = '';
+    var refreshCatalogNext = false;
     var isQrRunning = false;
     var qrRun = {processed: 0, success: 0, failed: 0, total: 0, mode: 'normal'};
     var qrButtonHtml = {
@@ -307,19 +320,27 @@ window.addEventListener('load', function () {
             data: function (d) {
                 d.search = {value: $('#mbSearch').val()};
                 d.qrcode_status = qrcodeStatus;
+                d.refresh_catalog = refreshCatalogNext ? '1' : '0';
+                refreshCatalogNext = false;
+            },
+            dataSrc: function (response) {
+                var notice = response.catalog_error || (response.catalog_stale ? 'Status berdasarkan cache Master Barang Zahir; klik Refresh untuk memperbarui.' : '');
+                $('#masterSyncNotice').text(notice).toggleClass('d-none', !notice);
+                return response.data || [];
             }
         },
         columns: [
             {data: 'nama_barang'},
             {data: 'expired_date', render: function (value) { return formatExpiredDate(value); }},
-            {data: 'no_lot'},
             {data: 'qty', render: function (value) { return formatNumber(value); }},
             {data: 'qty_pcs', render: function (value) { return formatNumber(value); }},
             {data: 'qty_box', render: function (value) { return formatNumber(value); }},
             {data: 'pending_qty', orderable: false, render: formatNumber},
             {data: 'pending_qty_box', orderable: false, render: formatNumber},
             {data: 'pending_qty_pcs', orderable: false, render: formatNumber},
-            {data: null, orderable: false, searchable: false, render: renderActions}
+            {data: 'sync_status', orderable: false, searchable: false, render: function (value, type, row) {
+                return type === 'display' ? renderSyncStatus(value, row.sync_reason) : value;
+            }}
             <?php if ($showStockCardRangePrint) : ?>,
             {data: null, orderable: false, searchable: false, className: 'text-center', render: function (_, type, row) {
                 var checked = selectedPrintIds[String(row.id)] ? ' checked' : '';
@@ -412,20 +433,17 @@ window.addEventListener('load', function () {
         return fallback;
     }
 
-    function renderAssetCell(path, id, ready) {
-        if (!path) {
-            return '<span class="mb-badge pending">Belum Ada</span>';
-        }
-        if (parseInt(ready || 0, 10) !== 1) {
-            return '<span class="mb-badge pending">File Hilang</span><div class="mb-asset-path mt-1">' + escapeHtml(path) + '</div>';
-        }
-        return '<button type="button" class="btn btn-outline-success btn-xs mb-icon-btn btn-preview-asset" data-toggle="tooltip" title="Preview asset" data-id="' + id + '"><i class="fas fa-eye"></i></button><div class="mb-asset-path mt-1">' + escapeHtml(path) + '</div>';
-    }
-
-    function renderActions(row) {
-        var html = '<div class="mb-actions">';
-        html += '<a class="btn btn-outline-success btn-xs" href="<?= base_url('admin/stockopname/master_barang') ?>">QR Barang</a></div>';
-        return html;
+    function renderSyncStatus(status, reason) {
+        var labels = {
+            generated: ['Sudah digenerate', 'ready'],
+            not_generated: ['Belum digenerate', 'pending'],
+            out_of_sync: ['Data tidak sinkron', 'pending'],
+            not_in_master: ['Tidak ada di Master Barang', 'pending'],
+            unverified: ['Belum terverifikasi', 'pending']
+        };
+        var item = labels[status] || labels.unverified;
+        return '<span class="mb-badge ' + item[1] + '">' + item[0] + '</span>' +
+            '<div class="mb-asset-path mt-1">' + escapeHtml(reason || '') + '</div>';
     }
 
     function displayValue(value) {
@@ -530,7 +548,7 @@ window.addEventListener('load', function () {
                 $('#previewItemLabel').text('#' + res.data.id + ' - ' + res.data.nama_barang);
                 renderStockCard(res.data);
                 currentPrintUrl = '<?= base_url($routeBase . '/print-qrcode') ?>/' + res.data.id;
-                $('#previewPrintQr').prop('disabled', false);
+                $('#previewPrintQr').prop('disabled', !(res.data.qrcode && res.data.qrcode.exists));
                 highlightSelectedRow();
             },
             error: function (xhr) {
@@ -879,6 +897,7 @@ window.addEventListener('load', function () {
     });
 
     $('#btnRefreshMasterBarang').on('click', function () {
+        refreshCatalogNext = true;
         table.ajax.reload(null, false);
         if (selectedId) {
             loadPreview(selectedId);
@@ -1087,5 +1106,13 @@ window.addEventListener('load', function () {
 
     loadSummary(false);
     loadFailedList();
+    $('#masterDataTabs a[data-toggle="tab"]').on('shown.bs.tab', function () {
+        $.fn.dataTable.tables({visible: true, api: true}).columns.adjust();
+    });
+    window.addEventListener('hashchange', function () {
+        if (window.location.hash === '#data-master-barang') { $('#tab-master-barang').tab('show'); }
+        if (window.location.hash === '#data-master-opname') { $('#tab-master-opname').tab('show'); }
+    });
+    if (window.location.hash === '#data-master-barang') { $('#tab-master-barang').tab('show'); }
 });
 </script>

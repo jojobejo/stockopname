@@ -7,7 +7,7 @@ if (!is_file(APPPATH.'libraries/stockopnameqr/qrcode.php')) { throw new RuntimeE
 $path = tempnam(sys_get_temp_dir(), 'opname_qr_');
 try {
     $generator = new Karisma_code_generator();
-    if (!$generator->qrcode('BR|123', $path)) { throw new RuntimeException('Generate QR lokal gagal'); }
+    if (!$generator->qrcode('MB|123|2027-01-01', $path)) { throw new RuntimeException('Generate QR lokal gagal'); }
     $info = getimagesize($path);
     if (!$info || $info[2] !== IMAGETYPE_PNG) { throw new RuntimeException('QR bukan PNG valid'); }
     echo "PASS: QR barang dibuat secara lokal menjadi PNG valid\n";

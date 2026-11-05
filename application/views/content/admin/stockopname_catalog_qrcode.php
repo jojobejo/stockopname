@@ -5,5 +5,5 @@
 <body><div class="label"><h2><?= html_escape($barang['nama_barang']) ?></h2>
 <p><?= html_escape($barang['kode_barang']) ?></p>
 <img src="<?= base_url($qr_path) ?>" alt="QR barang">
-<p>Scan barang, lalu pilih lot dan expired date.</p></div><br>
+<p>Expired Date: <?= html_escape($barang['expired_date']) ?></p><p>Scan untuk input opname berdasarkan Data Master Barang.</p></div><br>
 <button onclick="window.print()">Cetak QR Barang</button></body></html>

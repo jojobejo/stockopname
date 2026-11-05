@@ -25,6 +25,17 @@ $code = $options['results'][0]['id'];
 $item = $model->catalog_item(0, $code);
 if (!$item || !$model->catalog_scan('BR|'.$item['barang_id'])) { throw new RuntimeException('Lookup QR barang gagal'); }
 echo "PASS: Lookup katalog dan QR barang\n";
+$masterList = $model->get_master_barang_datatable(['draw' => 1, 'start' => 0, 'length' => 2, 'qrcode_status' => 'generated']);
+$qrSummary = $model->qrcode_summary();
+if (!isset($masterList['recordsFiltered'], $qrSummary['done'], $qrSummary['pending'])) {
+    throw new RuntimeException('Daftar atau ringkasan QR Master Opname gagal');
+}
+foreach ($masterList['data'] as $masterRow) {
+    if (empty($masterRow['qrcode']) || !isset($masterRow['qrcode_ready'])) {
+        throw new RuntimeException('QR barang tidak terhubung ke master opname');
+    }
+}
+echo "PASS: Daftar, filter, dan ringkasan QR Master Opname\n";
 $pending = $model->pending_master_options(2);
 if ($pending) {
     $row = $pending[0];

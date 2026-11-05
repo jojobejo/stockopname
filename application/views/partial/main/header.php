@@ -5,6 +5,10 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="icon" href="<?php echo base_url("assets/images/Karisma.png") ?>">
+  <link rel="manifest" href="<?= base_url('app.webmanifest') ?>">
+  <link rel="apple-touch-icon" href="<?= base_url('assets/images/app-icon-192.png') ?>">
+  <meta name="theme-color" content="#164a8a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
   <title><?php echo $page_title; ?></title>
   <script src="https://canvasjs.com/assets/script/canvasjs.min.js"></script>
   <!-- <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js" integrity="sha512-ElRFoEQdI5Ht6kZvyzXhYG9NqjtkmlkfYk0wr6wHxU9JEHakS7UJZNeml5ALk+8IKlU6jDgMabC3vkumRokgJA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>

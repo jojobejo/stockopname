@@ -6,6 +6,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="theme-color" content="#2563eb">
     <link rel="icon" href="<?= base_url('assets/images/Karisma.png') ?>">
+    <link rel="manifest" href="<?= base_url('app.webmanifest') ?>">
+    <link rel="apple-touch-icon" href="<?= base_url('assets/images/app-icon-192.png') ?>">
+    <meta name="apple-mobile-web-app-capable" content="yes">
     <title><?= htmlspecialchars($page_title ?? 'Karisma ERP', ENT_QUOTES, 'UTF-8') ?></title>
 
     <link rel="preconnect" href="https://cdn.jsdelivr.net">
@@ -26,6 +29,7 @@
                 </div>
             </div>
             <div class="topbar-actions">
+                <button class="icon-btn" type="button" data-install-app aria-label="Pasang aplikasi"><i class="fas fa-download"></i></button>
                 <button class="icon-btn" type="button" data-bs-toggle="offcanvas" data-bs-target="#mobileSearchCanvas" aria-label="Cari dan filter">
                     <i class="fas fa-search"></i>
                 </button>

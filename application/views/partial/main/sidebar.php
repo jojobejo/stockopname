@@ -9,7 +9,9 @@
     <?php 
     $allowed_roles = ['DIREKTURCK', 'ADMLOG', 'MANAGERWH', 'SALESCK', 'MANAGERCK'];
     $CI =& get_instance();
-    $hasMasterUserManagementAccess = (strtolower((string) $CI->session->userdata('username')) === 'admin');
+    $masterUsername = strtolower(trim((string) $CI->session->userdata('username')));
+    $hasMasterUserManagementAccess = in_array($masterUsername, ['admin', 'admin1'], true);
+    $hasFullMasterUserAccess = ($masterUsername === 'admin');
     $dynamicSidebarTree = [];
     if (isset($CI->db) && $CI->db->table_exists('tb_menu')) {
       $CI->load->model('master/M_Menu', 'sidebarMenuModel');
@@ -59,6 +61,7 @@
                     <p>User Management</p>
                   </a>
                 </li>
+                <?php if ($hasFullMasterUserAccess) : ?>
                 <li class="nav-item">
                   <a href="<?= base_url('master/jobdesk') ?>" class="nav-link">
                     <i class="fas fa-briefcase nav-icon"></i>
@@ -77,6 +80,7 @@
                     <p>Menu</p>
                   </a>
                 </li>
+                <?php endif; ?>
               </ul>
             </li>
           </ul>

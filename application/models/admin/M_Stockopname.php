@@ -2112,6 +2112,12 @@ class M_Stockopname extends CI_Model
 
     private function opname_dimensi_from_row($row)
     {
+        if (preg_match('/^MB\|([1-9][0-9]*)\|\d{4}-\d{2}-\d{2}$/', (string)($row['scan_code'] ?? ''), $match)) {
+            $catalog = $this->catalog_item((int)$match[1]);
+            if ($catalog && $catalog['kode_barang'] === ($row['kode_barang'] ?? '') && (int)$catalog['dimensi'] > 0) {
+                return (int)$catalog['dimensi'];
+            }
+        }
         $masterDimensi = $this->master_dimensi_for_opname_row($row);
         if ($masterDimensi > 0) {
             return $masterDimensi;
@@ -2626,10 +2632,12 @@ class M_Stockopname extends CI_Model
 
     private function master_barang_select()
     {
-        $legacyQrcode = $this->db->field_exists('qrcode', $this->masterTable) ? 'qrcode' : "''";
-        $qrcode = $this->db->field_exists('qrcode_file', $this->masterTable)
-            ? "COALESCE(NULLIF(qrcode_file, ''), NULLIF({$legacyQrcode}, ''), '') AS qrcode"
-            : ($this->db->field_exists('qrcode', $this->masterTable) ? 'qrcode' : 'NULL AS qrcode');
+        $catalogId = "(SELECT b.id FROM {$this->masterBarangAllTable} b
+            WHERE b.kd_barang = {$this->masterTable}.kode_barang ORDER BY b.id ASC LIMIT 1) AS catalog_id";
+        $catalogName = "(SELECT b.nama_barang FROM {$this->masterBarangAllTable} b
+            WHERE b.kd_barang = {$this->masterTable}.kode_barang ORDER BY b.id ASC LIMIT 1) AS catalog_nama_barang";
+        $qrcode = "(SELECT b.qrcode FROM {$this->masterBarangAllTable} b
+            WHERE b.kd_barang = {$this->masterTable}.kode_barang ORDER BY b.id ASC LIMIT 1) AS qrcode";
         $barcode = $this->db->field_exists('barcode', $this->masterTable) ? 'barcode' : 'NULL AS barcode';
         $qrcodeValue = $this->db->field_exists('qrcode_value', $this->masterTable) ? 'qrcode_value' : 'NULL AS qrcode_value';
         $qrcodeFile = $this->db->field_exists('qrcode_file', $this->masterTable) ? 'qrcode_file' : 'NULL AS qrcode_file';
@@ -2660,6 +2668,8 @@ class M_Stockopname extends CI_Model
             COALESCE(qty_box, 0) AS qty_box,
             ' . $pendingSelect . ',
             ' . $dimensi . ',
+            ' . $catalogId . ',
+            ' . $catalogName . ',
             ' . $qrcode . ',
             ' . $barcode . ',
             ' . $qrcodeValue . ',
@@ -2698,6 +2708,15 @@ class M_Stockopname extends CI_Model
 
     private function master_barang_qrcode_filter($status)
     {
+        if (in_array($status, ['generated', 'pending'], true) && $this->db->table_exists($this->masterBarangAllTable)) {
+            $exists = "EXISTS (SELECT 1 FROM {$this->masterBarangAllTable} b WHERE b.kd_barang = {$this->masterTable}.kode_barang AND TRIM(COALESCE(b.qrcode, '')) <> '')";
+            $this->db->where(($status === 'pending' ? 'NOT ' : '') . $exists, null, false);
+            return;
+        }
+        if ($status === 'failed') {
+            $this->db->where('1 = 0', null, false);
+            return;
+        }
         if ($this->db->field_exists('qrcode_status', $this->masterTable)) {
             if ($status === 'generated') {
                 $this->db->where('qrcode_status', 'DONE');
@@ -3372,7 +3391,7 @@ class M_Stockopname extends CI_Model
         return ['status' => true, 'message' => 'Barang pending berhasil dihapus.', 'data' => ['sync' => $sync]];
     }
 
-    public function get_master_barang_datatable($post, $qtyMode = 'positive')
+    public function get_master_barang_datatable($post, $qtyMode = 'positive', $zahirCatalog = null)
     {
         if (!$this->db->table_exists($this->masterTable)) {
             return [
@@ -3391,40 +3410,94 @@ class M_Stockopname extends CI_Model
         $columns = [
             'nama_barang',
             'expired_date',
-            'no_lot',
             'qty',
             'qty_pcs',
             'qty_box',
+            'id',
+            'id',
+            'id',
             'id',
         ];
         $orderIndex = (int)($post['order'][0]['column'] ?? 1);
         $orderColumn = $columns[$orderIndex] ?? 'nama_barang';
         $orderDir = strtolower((string)($post['order'][0]['dir'] ?? 'asc')) === 'desc' ? 'DESC' : 'ASC';
+        $filterByMasterQr = in_array($qrcodeStatus, ['generated', 'pending'], true);
 
         $this->master_barang_select();
         $this->master_barang_qty_filter($qtyMode);
         $this->master_barang_search($search);
-        $this->master_barang_qrcode_filter($qrcodeStatus);
+        if (!$filterByMasterQr) { $this->master_barang_qrcode_filter($qrcodeStatus); }
         $this->db->order_by($orderColumn, $orderDir, false);
-        if ($length > 0) {
+        if (!$filterByMasterQr && $length > 0) {
             $this->db->limit($length, $start);
         }
 
         $rows = $this->db->get()->result_array();
         foreach ($rows as &$row) {
-            $qrcode = trim((string)($row['qrcode'] ?? ''));
             $barcode = trim((string)($row['barcode'] ?? ''));
-            $row['qrcode_ready'] = $qrcode !== '' && is_file(FCPATH . $qrcode) ? 1 : 0;
+            $expectedQrcode = 'assets/qrcode/stockopname/MB_' . (int)($row['catalog_id'] ?? 0)
+                . '_' . str_replace('-', '', (string)($row['expired_date'] ?? '')) . '.png';
+            $row['qrcode_ready'] = !empty($row['catalog_id']) && is_file(FCPATH . $expectedQrcode) ? 1 : 0;
             $row['barcode_ready'] = $barcode !== '' && is_file(FCPATH . $barcode) ? 1 : 0;
+            $sync = $this->master_barang_sync_status($row, $zahirCatalog);
+            $row['sync_status'] = $sync['status'];
+            $row['sync_reason'] = $sync['reason'];
         }
         unset($row);
+        $recordsFiltered = $filterByMasterQr ? 0 : $this->count_filtered_master_barang($search, $qrcodeStatus, $qtyMode);
+        if ($filterByMasterQr) {
+            $rows = array_values(array_filter($rows, function ($row) use ($qrcodeStatus) {
+                return $qrcodeStatus === 'generated' ? $row['sync_status'] === 'generated'
+                    : $row['sync_status'] !== 'generated';
+            }));
+            $recordsFiltered = count($rows);
+            if ($length > 0) { $rows = array_slice($rows, $start, $length); }
+        }
 
         return [
             'draw' => (int)($post['draw'] ?? 1),
             'recordsTotal' => $this->count_all_master_barang($qtyMode),
-            'recordsFiltered' => $this->count_filtered_master_barang($search, $qrcodeStatus, $qtyMode),
+            'recordsFiltered' => $recordsFiltered,
             'data' => $rows,
         ];
+    }
+
+    public function master_barang_sync_status(array $row, $zahirCatalog = null)
+    {
+        if (empty($row['catalog_id'])) {
+            return ['status' => 'not_in_master', 'reason' => 'Kode tidak ada di Master Barang lokal'];
+        }
+        if ($zahirCatalog === null) {
+            return ['status' => 'unverified', 'reason' => 'Data Master Barang Zahir tidak tersedia'];
+        }
+        $code = strtoupper(trim((string)($row['kode_barang'] ?? '')));
+        $name = trim((string)($row['nama_barang'] ?? ''));
+        $localName = trim((string)($row['catalog_nama_barang'] ?? ''));
+        $expired = trim((string)($row['expired_date'] ?? ''));
+        $lots = $zahirCatalog[$code] ?? [];
+        if (!$lots) {
+            return ['status' => 'not_in_master', 'reason' => 'Kode tidak ada di Data Master Barang'];
+        }
+        if ($name !== $localName) {
+            return ['status' => 'out_of_sync', 'reason' => 'Nama berbeda dari Master Barang lokal'];
+        }
+        foreach ($lots as $lot) {
+            if (trim((string)$lot['nama_barang']) === $name && trim((string)$lot['expired_date']) === $expired) {
+                return !empty($row['qrcode_ready'])
+                    ? ['status' => 'generated', 'reason' => 'QR tersedia dan data sesuai Master Barang']
+                    : ['status' => 'not_generated', 'reason' => 'File QR belum tersedia atau tidak sesuai ID Master Barang'];
+            }
+        }
+        $sameName = false;
+        $sameExpired = false;
+        foreach ($lots as $lot) {
+            $sameName = $sameName || trim((string)$lot['nama_barang']) === $name;
+            $sameExpired = $sameExpired || trim((string)$lot['expired_date']) === $expired;
+        }
+        $reason = $sameName && $sameExpired ? 'Pasangan nama dan expired date tidak cocok'
+            : (!$sameName && !$sameExpired ? 'Nama dan expired date berbeda'
+                : (!$sameName ? 'Nama berbeda' : 'Expired date berbeda'));
+        return ['status' => 'out_of_sync', 'reason' => $reason . ' dari Data Master Barang'];
     }
 
     public function master_barang_datatable($post)
@@ -3470,7 +3543,6 @@ class M_Stockopname extends CI_Model
 
         $this->master_barang_select();
         $this->master_barang_qty_filter($qtyMode);
-        $this->master_barang_qrcode_filter('generated');
         $this->db
             ->order_by('nama_barang', 'ASC')
             ->order_by('expired_date', 'ASC')
@@ -3480,8 +3552,11 @@ class M_Stockopname extends CI_Model
         $rows = $this->db->get()->result_array();
         $printable = [];
         foreach ($rows as $row) {
-            $qrcode = trim((string)($row['qrcode'] ?? ''));
-            if ($qrcode !== '' && is_file(FCPATH . $qrcode)) {
+            $qrcode = 'assets/qrcode/stockopname/MB_' . (int)($row['catalog_id'] ?? 0)
+                . '_' . str_replace('-', '', (string)($row['expired_date'] ?? '')) . '.png';
+            if (!empty($row['catalog_id']) && is_file(FCPATH . $qrcode)
+                && trim((string)($row['nama_barang'] ?? '')) === trim((string)($row['catalog_nama_barang'] ?? ''))) {
+                $row['qrcode'] = $qrcode;
                 $printable[] = $row;
             }
         }
@@ -3619,7 +3694,7 @@ class M_Stockopname extends CI_Model
         }
         $catalog = [];
         foreach (array_chunk(array_values(array_unique($codes)), 500) as $batch) {
-            $rows = $this->db->select('id, kd_barang, qrcode')
+            $rows = $this->db->select('id, kd_barang, nama_barang, qrcode')
                 ->from($this->masterBarangAllTable)
                 ->where_in('kd_barang', $batch)
                 ->order_by('id', 'ASC')
@@ -3761,7 +3836,7 @@ class M_Stockopname extends CI_Model
             'input_at' => date('Y-m-d H:i:s'),
             'wilayah' => (int)($input['wilayah'] ?? 0),
             'tim_opname' => (int)($input['tim_opname'] ?? 0),
-            'scan_code' => (string)($masterRow['qrcode'] ?? $masterRow['barcode'] ?? $masterRow['kode_barang'] ?? ''),
+            'scan_code' => (string)($masterRow['scan_code'] ?? $masterRow['qrcode'] ?? $masterRow['barcode'] ?? $masterRow['kode_barang'] ?? ''),
         ];
         if ($this->db->field_exists('input_source', $this->opnameTable)) {
             $data['input_source'] = (string)($input['input_source'] ?? 'scan_qrcode');
@@ -3944,6 +4019,7 @@ class M_Stockopname extends CI_Model
             ->select('id')
             ->from($this->manualMasterTable)
             ->where('source_id', $sourceId)
+            ->where('kode_barang', (string)($masterRow['kode_barang'] ?? ''))
             ->where('expired_date', (string)($masterRow['expired_date'] ?? ''))
             ->where('no_lot', (string)($masterRow['no_lot'] ?? '-'))
             ->where('status', 'PENDING')
@@ -3998,7 +4074,7 @@ class M_Stockopname extends CI_Model
             'input_at' => date('Y-m-d H:i:s'),
             'wilayah' => (int)($input['wilayah'] ?? 0),
             'tim_opname' => (int)($input['tim_opname'] ?? 0),
-            'scan_code' => (string)($masterRow['qrcode'] ?? $masterRow['barcode'] ?? $masterRow['kode_barang'] ?? ''),
+            'scan_code' => (string)($masterRow['scan_code'] ?? $masterRow['qrcode'] ?? $masterRow['barcode'] ?? $masterRow['kode_barang'] ?? ''),
         ];
 
         if ($this->db->field_exists('input_source', $this->opnameTable)) {
@@ -4459,32 +4535,24 @@ class M_Stockopname extends CI_Model
             ];
         }
 
-        if (!$this->db->field_exists('qrcode_status', $this->masterTable)) {
-            $total = $this->qrcode_total_count($qtyMode);
-            return [
-                'total' => $total,
-                'done' => 0,
-                'pending' => $total,
-                'failed' => 0,
-            ];
+        $this->master_barang_select();
+        $this->master_barang_qty_filter($qtyMode);
+        $rows = $this->db->get()->result_array();
+        $done = 0;
+        foreach ($rows as $row) {
+            $path = 'assets/qrcode/stockopname/MB_' . (int)($row['catalog_id'] ?? 0)
+                . '_' . str_replace('-', '', (string)($row['expired_date'] ?? '')) . '.png';
+            if (!empty($row['catalog_id']) && is_file(FCPATH . $path)
+                && trim((string)$row['nama_barang']) === trim((string)$row['catalog_nama_barang'])) {
+                $done++;
+            }
         }
 
-        $this->db
-            ->select("
-                COUNT(*) AS total,
-                SUM(CASE WHEN qrcode_status = 'DONE' THEN 1 ELSE 0 END) AS done,
-                SUM(CASE WHEN qrcode_status = 'FAILED' OR qrcode_retry_flag = 1 THEN 1 ELSE 0 END) AS failed,
-                SUM(CASE WHEN qrcode_status IS NULL OR qrcode_status IN ('PENDING','PROCESS') THEN 1 ELSE 0 END) AS pending
-            ", false)
-            ->from($this->masterTable);
-        $this->master_barang_qty_filter($qtyMode);
-        $row = $this->db->get()->row_array();
-
         return [
-            'total' => (int)($row['total'] ?? 0),
-            'done' => (int)($row['done'] ?? 0),
-            'pending' => (int)($row['pending'] ?? 0),
-            'failed' => (int)($row['failed'] ?? 0),
+            'total' => count($rows),
+            'done' => $done,
+            'pending' => count($rows) - $done,
+            'failed' => 0,
         ];
     }
 
@@ -4501,34 +4569,12 @@ class M_Stockopname extends CI_Model
 
     public function qrcode_done_count($qtyMode = 'positive')
     {
-        if (!$this->db->table_exists($this->masterTable) || !$this->db->field_exists('qrcode_status', $this->masterTable)) {
-            return 0;
-        }
-
-        $this->db->from($this->masterTable);
-        $this->master_barang_qty_filter($qtyMode);
-        $this->db->where('qrcode_status', 'DONE');
-        return (int)$this->db->count_all_results();
+        return $this->qrcode_summary($qtyMode)['done'];
     }
 
     public function qrcode_pending_count($qtyMode = 'positive')
     {
-        if (!$this->db->table_exists($this->masterTable)) {
-            return 0;
-        }
-
-        if (!$this->db->field_exists('qrcode_status', $this->masterTable)) {
-            return $this->qrcode_total_count($qtyMode);
-        }
-
-        $this->db->from($this->masterTable);
-        $this->master_barang_qty_filter($qtyMode);
-        $this->db->group_start();
-        $this->db->where('qrcode_status', 'PENDING');
-        $this->db->or_where('qrcode_status', 'PROCESS');
-        $this->db->or_where('qrcode_status IS NULL', null, false);
-        $this->db->group_end();
-        return (int)$this->db->count_all_results();
+        return $this->qrcode_summary($qtyMode)['pending'];
     }
 
     public function qrcode_failed_count($qtyMode = 'positive')

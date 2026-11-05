@@ -27,6 +27,7 @@
         };
     </script>
     <script src="<?= base_url('assets/js/mobile-erp.js') ?>"></script>
+<script src="<?= base_url('assets/js/install-app.js') ?>" defer></script>
 </body>
 
 </html>
