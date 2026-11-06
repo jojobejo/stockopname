@@ -75,10 +75,6 @@
                                         <div id="itemName">-</div>
                                     </div>
                                     <div class="so-readonly full">
-                                        <label>Kode Barang</label>
-                                        <div id="itemCode">-</div>
-                                    </div>
-                                    <div class="so-readonly full">
                                         <label>Expired Date</label>
                                         <div id="itemExpired">-</div>
                                     </div>
@@ -218,7 +214,6 @@ window.addEventListener('load', function () {
 
     function fillItem(row) {
         $('#itemName').text(row.nama_barang || '-');
-        $('#itemCode').text(row.kode_barang || '-');
         $('#itemExpired').text(formatExpiredDate(row.expired_date));
         selectedDimensi = parseInt(row.dimensi || 0, 10) || 0;
         updateDimensiView();
@@ -229,7 +224,7 @@ window.addEventListener('load', function () {
     function resetAfterSave() {
         $('#formInputOpname')[0].reset();
         $('#scanValue').val('');
-        $('#itemName,#itemCode,#itemExpired').text('-');
+        $('#itemName,#itemExpired').text('-');
         $('#manualBarang').val(null).trigger('change');
         $('#requestBarang').val(null).trigger('change');
         $('#requestExpiredView').val('');
@@ -270,7 +265,7 @@ window.addEventListener('load', function () {
             $('#btnScan').removeClass('btn-primary').addClass('btn-outline-primary').html('<i class="fas fa-qrcode"></i>Scan');
             $('#btnRequestMode').removeClass('btn-warning').addClass('btn-outline-warning');
             $('#scanValue').val('');
-            $('#itemName,#itemCode,#itemExpired').text('-');
+            $('#itemName,#itemExpired').text('-');
             selectedDimensi = 0;
             updateDimensiView();
             updateQtyTotal();
@@ -286,7 +281,7 @@ window.addEventListener('load', function () {
             $('#btnScan').removeClass('btn-primary').addClass('btn-outline-primary').html('<i class="fas fa-qrcode"></i>Scan');
             $('#btnManualMode').removeClass('btn-primary').addClass('btn-outline-primary');
             $('#scanValue').val('');
-            $('#itemName,#itemCode,#itemExpired').text('-');
+            $('#itemName,#itemExpired').text('-');
             selectedDimensi = 0;
             updateDimensiView();
             updateQtyTotal();
@@ -366,7 +361,7 @@ window.addEventListener('load', function () {
         if (inputMode !== 'scan') setInputMode('scan');
         lookupBusy = true;
         $('#scanValue').val('');
-        $('#itemName,#itemCode,#itemExpired').text('-');
+        $('#itemName,#itemExpired').text('-');
         $('#btnSaveOpname').prop('disabled', true);
         setScannerStatus('Mencari');
         $.ajax({

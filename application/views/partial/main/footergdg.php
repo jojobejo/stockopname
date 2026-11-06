@@ -149,6 +149,7 @@
     });
 </script>
 
+<script src="<?= base_url('assets/js/install-app.js') ?>" defer></script>
 </body>
 
 </html>

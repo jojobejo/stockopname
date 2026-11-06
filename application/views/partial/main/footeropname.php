@@ -39,6 +39,7 @@
 <!-- AdminLTE App -->
 <script src="<?php echo base_url('assets/dist/js/adminlte.js') ?>"></script>
 
+<script src="<?= base_url('assets/js/install-app.js') ?>" defer></script>
 </body>
 
 </html>

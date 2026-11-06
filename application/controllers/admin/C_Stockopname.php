@@ -1205,12 +1205,17 @@ class C_Stockopname extends CI_Controller
         }
         foreach ($source['data'] as $item) {
             if (strcasecmp(trim((string)($item['kode_barang'] ?? '')), trim((string)$barang['kode_barang'])) === 0
-                && trim((string)($item['nama_barang'] ?? '')) === trim((string)$barang['nama_barang'])
+                && $this->normalized_zahir_name($item['nama_barang'] ?? '') === $this->normalized_zahir_name($barang['nama_barang'])
                 && trim((string)($item['expired_date'] ?? '')) === $expiredDate) {
                 return ['status' => true, 'item' => $item];
             }
         }
         return ['status' => false, 'message' => 'Nama barang atau expired date QR tidak sesuai Data Master Barang. Refresh master dan generate ulang QR.'];
+    }
+
+    private function normalized_zahir_name($name)
+    {
+        return trim(preg_replace('/\s+/u', ' ', str_replace('*', '', (string)$name)));
     }
 
     private function scan_catalog_qrcode($value)
@@ -1538,7 +1543,7 @@ class C_Stockopname extends CI_Controller
     private function catalog_qrcode_for_master_row($row)
     {
         $catalog = $this->stockopname->catalog_item(0, (string)($row['kode_barang'] ?? ''));
-        if (!$catalog || trim((string)$catalog['nama_barang']) !== trim((string)($row['nama_barang'] ?? ''))
+        if (!$catalog || $this->normalized_zahir_name($catalog['nama_barang']) !== $this->normalized_zahir_name($row['nama_barang'] ?? '')
             || !$this->valid_date((string)($row['expired_date'] ?? ''))) {
             return ['value' => '', 'asset' => $this->asset_payload('')];
         }
@@ -1594,7 +1599,7 @@ class C_Stockopname extends CI_Controller
                 $barang = null;
                 foreach ($source['data'] as $candidate) {
                     if (strcasecmp($candidate['kode_barang'], $kode) === 0
-                        && $candidate['nama_barang'] === $nama
+                        && $this->normalized_zahir_name($candidate['nama_barang']) === $this->normalized_zahir_name($nama)
                         && $candidate['expired_date'] === $expired) {
                         $barang = $candidate;
                         break;
@@ -1750,7 +1755,7 @@ class C_Stockopname extends CI_Controller
             $path = $local && $this->valid_date($row['expired_date'])
                 ? $this->catalog_qrcode_path((int)$local['id'], $row['expired_date']) : '';
             $ready = $path !== '' && is_file(FCPATH . $path)
-                && trim((string)($local['nama_barang'] ?? '')) === trim((string)$row['nama_barang']);
+                && $this->normalized_zahir_name($local['nama_barang'] ?? '') === $this->normalized_zahir_name($row['nama_barang']);
             $row['qrcode_url'] = $ready ? base_url($path) : '';
             $row['qrcode_status'] = $ready ? 'generated' : 'not_generated';
         }

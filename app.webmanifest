@@ -3,9 +3,9 @@
   "name": "Karisma Stock Opname",
   "short_name": "Stock Opname",
   "description": "Akses Stock Opname Karisma dari layar utama ponsel.",
-  "start_url": "https://10.10.10.26/stockopname/",
-  "scope": "https://10.10.10.26/stockopname/",
-  "display": "standalone",
+  "start_url": "./",
+  "scope": "./",
+  "display": "fullscreen",
   "background_color": "#ffffff",
   "theme_color": "#164a8a",
   "icons": [

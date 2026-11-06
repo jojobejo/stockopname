@@ -11,7 +11,7 @@ class Zahir_lot_catalog
     {
         $this->ci =& get_instance();
         $this->ci->load->config('zahir_stock_lot');
-        $this->lotCache = APPPATH . 'cache/zahir_master_barang_lot_qty.json';
+        $this->lotCache = APPPATH . 'cache/zahir_master_barang_lot_qty_v2.json';
         $this->dimensionCache = APPPATH . 'cache/zahir_master_barang_dimensions.json';
     }
 
@@ -98,7 +98,7 @@ class Zahir_lot_catalog
         if (!$nodes || !$nodes->length) {
             return ['status' => false, 'message' => 'Tabel LOT ZahirDigital tidak ditemukan.'];
         }
-        $unique = [];
+        $sourceRows = [];
         foreach ($nodes as $node) {
             $cells = $node->getElementsByTagName('td');
             if ($cells->length < 10) {
@@ -109,23 +109,62 @@ class Zahir_lot_catalog
             $date = DateTime::createFromFormat('!j/n/Y', trim($cells->item(9)->textContent));
             $expired = $date ? $date->format('Y-m-d') : trim($cells->item(9)->textContent);
             $quantity = (float)str_replace(',', '.', trim($cells->item(5)->textContent));
-            $key = json_encode([$kode, $nama, $expired]);
+            $sourceRows[] = ['kode_barang' => $kode, 'nama_barang' => $nama, 'expired_date' => $expired, 'qty_lot' => $quantity];
+        }
+        return ['status' => true, 'data' => $this->mergeLotRows($sourceRows), 'stale' => false];
+    }
+
+    private function mergeLotRows(array $sourceRows)
+    {
+        $unique = [];
+        foreach ($sourceRows as $sourceRow) {
+            $kode = $sourceRow['kode_barang'];
+            $nama = trim(preg_replace('/\s+/u', ' ', str_replace('*', '', $sourceRow['nama_barang'])));
+            if ($kode === '' || $nama === '') { continue; }
+            $expired = $sourceRow['expired_date'];
+            $quantity = $sourceRow['qty_lot'];
+            $key = json_encode([strtoupper($nama), $expired]);
             if (!isset($unique[$key])) {
-                $unique[$key] = ['kode_barang' => $kode, 'nama_barang' => $nama, 'expired_date' => $expired, 'qty_lot' => 0.0];
+                $unique[$key] = ['nama_barang' => $nama, 'expired_date' => $expired, 'qty_lot' => 0.0, 'codes' => []];
             }
+            $codeKey = strtoupper($kode);
+            if (!isset($unique[$key]['codes'][$codeKey])) {
+                $unique[$key]['codes'][$codeKey] = ['kode_barang' => $kode, 'nama_barang' => $nama, 'qty_lot' => 0.0];
+            }
+            $unique[$key]['codes'][$codeKey]['qty_lot'] += $quantity;
             $unique[$key]['qty_lot'] += $quantity;
         }
         $rows = [];
         foreach ($unique as $row) {
             if ($row['qty_lot'] > 0) {
-                unset($row['qty_lot']);
-                $rows[] = $row;
+                $selected = null;
+                foreach ($row['codes'] as $code) {
+                    if ($code['qty_lot'] <= 0) { continue; }
+                    if ($selected === null || $this->preferCode($code['kode_barang'], $selected['kode_barang'])) {
+                        $selected = $code;
+                    }
+                }
+                $rows[] = [
+                    'kode_barang' => $selected['kode_barang'],
+                    'nama_barang' => $selected['nama_barang'],
+                    'expired_date' => $row['expired_date'],
+                ];
             }
         }
         usort($rows, function ($a, $b) {
             return [$a['kode_barang'], $a['nama_barang'], $a['expired_date']] <=> [$b['kode_barang'], $b['nama_barang'], $b['expired_date']];
         });
-        return ['status' => true, 'data' => $rows, 'stale' => false];
+        return $rows;
+    }
+
+    private function preferCode($candidate, $current)
+    {
+        $candidateQ = strtoupper(substr($candidate, 0, 1)) === 'Q';
+        $currentQ = strtoupper(substr($current, 0, 1)) === 'Q';
+        if ($candidateQ !== $currentQ) {
+            return $candidateQ;
+        }
+        return strcasecmp($candidate, $current) < 0;
     }
 
     private function fetchDimensions()

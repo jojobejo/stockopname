@@ -29,9 +29,8 @@
                 </div>
             </div>
             <div class="topbar-actions">
-                <button class="icon-btn" type="button" data-install-app aria-label="Pasang aplikasi"><i class="fas fa-download"></i></button>
-                <button class="icon-btn" type="button" data-bs-toggle="offcanvas" data-bs-target="#mobileSearchCanvas" aria-label="Cari dan filter">
-                    <i class="fas fa-search"></i>
+                <button class="icon-btn" type="button" data-bs-toggle="offcanvas" data-bs-target="#mobileSearchCanvas" aria-label="Buka sidebar">
+                    <i class="fas fa-bars"></i>
                 </button>
                 <button class="icon-btn has-dot" type="button" data-mobile-toast="3 notifikasi operasional baru" aria-label="Notifikasi">
                     <i class="far fa-bell"></i>

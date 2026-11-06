@@ -28,7 +28,6 @@
           </div>
         </div>
       </form>
-      <button type="button" class="btn btn-outline-primary btn-block mt-3" data-install-app>Pasang pintasan di ponsel</button>
       <?php if ($this->session->flashdata("gagal")) : ?>
         <div class="alert alert-danger alert-dismissible fade show mt-3" role="alert">
           <?php echo "<center>" . $this->session->flashdata("gagal") . "</center>" ?>

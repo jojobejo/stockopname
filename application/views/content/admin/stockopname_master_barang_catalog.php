@@ -17,8 +17,8 @@
             <div class="row catalog-stats">
                 <div class="col-12 col-md-6 col-xl-3 mb-3"><button type="button" class="catalog-stat" data-status=""><span>Total Data</span><strong id="catalogTotal">0</strong><small>Kelompok nama dan expired date</small></button></div>
                 <div class="col-12 col-md-6 col-xl-3 mb-3"><a class="catalog-stat" href="<?= base_url('admin/stockopname/master_opname/qty-zero') ?>"><span>Total Barang Qty 0</span><strong id="catalogQtyZero">0</strong><small>Master opname lokal · lihat data qty 0</small></a></div>
-                <div class="col-12 col-md-6 col-xl-3 mb-3"><button type="button" class="catalog-stat" data-status="generated"><span>QR Code Selesai</span><strong id="catalogQrDone">0</strong><small>Jumlah kode siap · filter grup selesai</small></button></div>
-                <div class="col-12 col-md-6 col-xl-3 mb-3"><button type="button" class="catalog-stat" data-status="not_generated"><span>QR Code Pending</span><strong id="catalogQrPending">0</strong><small>Jumlah kode pending · filter grup pending</small></button></div>
+                <div class="col-12 col-md-6 col-xl-3 mb-3"><button type="button" class="catalog-stat" data-status="generated"><span>QR Code Selesai</span><strong id="catalogQrDone">0</strong><small>Jumlah barang siap · filter selesai</small></button></div>
+                <div class="col-12 col-md-6 col-xl-3 mb-3"><button type="button" class="catalog-stat" data-status="not_generated"><span>QR Code Pending</span><strong id="catalogQrPending">0</strong><small>Jumlah barang pending · filter pending</small></button></div>
                 <div class="col-12 col-md-6 col-xl-3 mb-3"><button type="button" class="catalog-print" id="printStockCardWidget" disabled><i class="fas fa-id-card"></i><strong>Print Kartu Stock</strong><small>Cetak kartu barang terpilih</small></button></div>
             </div>
             <div class="row"><div class="col-lg-8 mb-3"><div class="card h-100">
@@ -28,7 +28,7 @@
             </div>
             <div class="card-body">
                 <div id="masterBarangError" class="alert alert-danger" role="alert" style="display:none"></div>
-                <p class="text-muted">Hanya barang dengan total Qty Lot lebih dari 0. Satu baris untuk setiap nama barang dan expired date. Bila kode barang lebih dari satu, semua kode ditampilkan dan QR tetap dibuat per kode.</p>
+                <p class="text-muted">Hanya barang dengan total Qty Lot lebih dari 0. Tanda * pada nama dihapus. Satu baris untuk setiap nama barang dan expired date; bila terdapat beberapa kode, kode berawalan Q diprioritaskan untuk dimensi dan QR.</p>
                 <div class="form-group d-flex align-items-center flex-wrap" style="gap:8px">
                     <label for="filterQrStatus" class="mb-0">Status QR</label>
                     <select id="filterQrStatus" class="form-control form-control-sm" style="max-width:210px">
@@ -43,7 +43,7 @@
             </div>
         </div></div><div class="col-lg-4 mb-3"><div class="card h-100" style="position:sticky;top:12px">
             <div class="card-header d-flex justify-content-between align-items-center"><span>Preview Cetak Kartu Stock</span><button type="button" class="btn btn-success btn-sm" id="printStockCard" disabled><i class="fas fa-print"></i> Cetak</button></div>
-            <div class="card-body"><p class="text-muted small">Pilih baris barang untuk melihat kartu. QR memuat kode barang dan expired date; scan menampilkan nama dan tanggal dari Data Master Barang.</p>
+            <div class="card-body"><p class="text-muted small">Pilih baris barang untuk melihat kartu. Scan QR menampilkan nama barang dan expired date.</p>
                 <div id="previewStockCard" class="stock-card-preview"><div class="text-muted text-center p-4">Pilih barang dari tabel.</div></div>
             </div>
         </div></div></div></div>
@@ -193,7 +193,7 @@ window.addEventListener('load', function () {
             }},
             {data: 'qrcode_status', render: function (value, type, row) {
                 if (type !== 'display') { return value; }
-                if (value === 'generated') { return '<span class="badge badge-success">Semua QR siap</span>'; }
+                if (value === 'generated') { return '<span class="badge badge-success">QR siap</span>'; }
                 if (value === 'partial') { return '<span class="badge badge-warning">Sebagian QR siap</span>'; }
                 return '<span class="badge badge-secondary">Belum digenerate</span>';
             }}

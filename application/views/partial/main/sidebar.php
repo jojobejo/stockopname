@@ -410,5 +410,19 @@
       </div>
     <?php endif; ?>
 
+    <div class="sidebar">
+      <nav class="mt-2" aria-label="Pemasangan aplikasi">
+        <ul class="nav nav-pills nav-sidebar flex-column">
+          <li class="nav-item">
+            <button type="button" class="nav-link text-left w-100 border-0" data-install-app>
+              <i class="nav-icon fas fa-download"></i>
+              <p data-install-label>Download aplikasi</p>
+            </button>
+          </li>
+        </ul>
+        <small class="d-block px-3 text-muted" data-device-label></small>
+      </nav>
+    </div>
+
     <!-- /.sidebar -->
   </aside>

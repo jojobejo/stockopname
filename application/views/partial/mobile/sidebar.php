@@ -1,12 +1,19 @@
 <div class="offcanvas offcanvas-end mobile-offcanvas" tabindex="-1" id="mobileSearchCanvas" aria-labelledby="mobileSearchCanvasLabel">
     <div class="offcanvas-header">
         <div>
-            <span class="app-eyebrow">Filter cepat</span>
-            <h2 class="offcanvas-title" id="mobileSearchCanvasLabel">Cari Data</h2>
+            <span class="app-eyebrow">Stock Opname</span>
+            <h2 class="offcanvas-title" id="mobileSearchCanvasLabel">Menu aplikasi</h2>
         </div>
         <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Tutup"></button>
     </div>
     <div class="offcanvas-body">
+        <div class="mobile-card shadow-none border mb-3">
+            <button class="btn btn-primary w-100 mobile-btn" type="button" data-install-app>
+                <i class="fas fa-download me-2"></i><span data-install-label>Download aplikasi</span>
+            </button>
+            <small class="d-block mt-2 text-muted" data-device-label></small>
+        </div>
+        <h3 class="h6 mb-3">Filter cepat</h3>
         <div class="mobile-card shadow-none border mb-3">
             <label class="form-label">Kata kunci</label>
             <div class="input-icon">
