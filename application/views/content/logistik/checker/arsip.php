@@ -110,7 +110,7 @@ tr.separator-label { display: none; } /* disembunyikan di DT, ditampilkan manual
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap4.min.css">
 <link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.1/css/buttons.bootstrap4.min.css">
 
-<body class="hold-transition sidebar-mini sidebar-collapse">
+<body class="hold-transition sidebar-mini">
 <div class="wrapper">
     <div class="preloader flex-column justify-content-center align-items-center">
         <img class="animation__shake" src="<?php echo base_url('assets/images/Karisma.png') ?>" alt="Logo" height="150" width="300">

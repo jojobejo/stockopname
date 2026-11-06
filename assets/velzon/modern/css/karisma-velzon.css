@@ -1,0 +1,34 @@
+/* KARISMA ERP adaptation of Velzon Modern, vertical layout. */
+:root{--vz-primary:#405189;--vz-primary-rgb:64,81,137;--vz-body-bg:#f3f3f9;--vz-border-color:#e9ebec;--vz-card-border-radius:0.65rem}
+body{font-family:Poppins,system-ui,-apple-system,"Segoe UI",sans-serif;background:#f3f3f9;color:#212529}
+.wrapper{background:#f3f3f9;min-height:100vh}
+.main-sidebar{background:#2a3042!important;box-shadow:0 2px 8px rgba(15,34,58,.16)!important;border:0}
+.main-sidebar .brand-link{height:70px;display:flex;align-items:center;border-bottom:1px solid rgba(255,255,255,.08);color:#fff!important;padding:10px 16px}
+.main-sidebar .brand-image{float:none;margin:0 12px 0 0;max-height:38px;width:42px!important;height:38px!important;object-fit:contain;background:#fff;border-radius:9px;padding:4px}
+.main-sidebar .brand-text{font-size:14px;line-height:1.35;font-weight:600!important;color:#e9ebec}
+.main-sidebar .sidebar{padding:10px 12px}
+.main-sidebar .nav-sidebar>.nav-item{margin:2px 0}
+.main-sidebar .nav-sidebar .nav-link{color:#abb9e8;border-radius:6px;padding:10px 12px;font-size:13px;transition:all .15s ease}
+.main-sidebar .nav-sidebar .nav-link p{font-weight:500}
+.main-sidebar .nav-sidebar .nav-link:hover,.main-sidebar .nav-sidebar .nav-link.active{color:#fff;background:rgba(64,81,137,.32)}
+.main-sidebar .nav-sidebar .nav-link.active{box-shadow:inset 3px 0 #a6b0cf}
+.main-sidebar .nav-sidebar .nav-treeview{padding-left:10px}
+.main-sidebar .nav-sidebar .nav-treeview .nav-link{font-size:12px;padding:8px 10px}
+.main-header.navbar{height:70px;background:#fff;border-bottom:1px solid #e9ebec;padding:0 1.5rem;margin-left:250px}
+.main-header .nav-link{color:#495057}
+.content-wrapper{background:#f3f3f9;margin-left:250px}
+.content-header{padding:1.25rem 1.5rem .25rem}
+.content{padding:0 1.5rem 1.5rem}
+.content-header h1,.content-header h2{font-size:19px;font-weight:600;color:#343a40}
+.card,.so-panel,.erp-panel{border:1px solid #e9ebec;border-radius:8px;box-shadow:0 1px 2px rgba(56,65,74,.08);overflow:hidden}
+.erp-hero{background:linear-gradient(110deg,#405189,#5266a2)!important;border-radius:8px!important;box-shadow:0 4px 14px rgba(64,81,137,.2)!important}
+.card-header,.so-panel-header,.erp-panel-header{background:#fff;border-bottom:1px solid #e9ebec}
+.card-title{font-size:15px;font-weight:600;color:#343a40}
+.btn-primary,.bg-primary{background-color:#405189!important;border-color:#405189!important}
+.btn{border-radius:5px;font-weight:500}
+.form-control,.custom-select,.select2-container--default .select2-selection--single{border-color:#ced4da;border-radius:5px;min-height:38px}
+.table thead th{background:#f3f6f9;color:#495057;border-bottom:1px solid #e9ebec;font-weight:600;font-size:12px;white-space:nowrap}
+.table td{vertical-align:middle}
+.main-footer{margin-left:250px;background:transparent;border-top:1px solid #e9ebec;padding:1rem 1.5rem;color:#878a99;font-size:12px}
+.preloader{background:#f3f3f9}
+@media(max-width:991.98px){.main-header.navbar,.content-wrapper,.main-footer{margin-left:0}.content{padding:0 .75rem 1rem}.content-header{padding:1rem .75rem .25rem}}

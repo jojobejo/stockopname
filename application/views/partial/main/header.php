@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-layout="vertical" data-topbar="light" data-sidebar="dark" data-sidebar-size="lg" data-preloader="disable">
 
 <head>
   <meta charset="utf-8">
@@ -7,7 +7,7 @@
   <link rel="icon" href="<?php echo base_url("assets/images/Karisma.png") ?>">
   <link rel="manifest" href="<?= base_url('app.webmanifest') ?>">
   <link rel="apple-touch-icon" href="<?= base_url('assets/images/app-icon-192.png') ?>">
-  <meta name="theme-color" content="#164a8a">
+  <meta name="theme-color" content="#405189">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <title><?php echo $page_title; ?></title>
   <script src="https://canvasjs.com/assets/script/canvasjs.min.js"></script>
@@ -29,6 +29,8 @@
   <!-- JQVMap -->
   <link rel="stylesheet" href="<?php echo base_url("assets/plugins/jqvmap/jqvmap.min.css") ?>">
   <!-- Theme style -->
+  <link rel="stylesheet" href="<?= base_url('assets/velzon/modern/css/app.min.css') ?>">
+  <link rel="stylesheet" href="<?= base_url('assets/velzon/modern/css/icons.min.css') ?>">
   <link rel="stylesheet" href="<?php echo base_url("assets/dist/css/adminlte.css") ?>">
   <!-- overlayScrollbars -->
   <link rel="stylesheet" href="<?php echo base_url("assets/plugins/overlayScrollbars/css/OverlayScrollbars.min.css") ?>">
@@ -52,6 +54,7 @@
   <script src="<?= base_url('assets/plugins/jquery/jquery.js') ?>"></script>
   <!-- CSS Custom Karisma -->
   <link rel="stylesheet" href="<?php echo base_url("assets/ipkp.css") ?>">
+  <link rel="stylesheet" href="<?= base_url('assets/velzon/modern/css/karisma-velzon.css') ?>">
   <!-- CSS HEADER KPI -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/apexcharts@3.37.1/dist/apexcharts.css" integrity="sha256-4MX+61mt9NVvvuPjUWdUdyfZfxSB1/Rf9WtqRHgG5S0=" crossorigin="anonymous">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.min.css" integrity="sha256-Qsx5lrStHZyR9REqhUF8iQt73X06c8LGIUPzpOhwRrI=" crossorigin="anonymous">

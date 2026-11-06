@@ -1,7 +1,7 @@
 <?php defined('BASEPATH') or exit('No direct script access allowed'); ?>
 <?php $embedded = !empty($embedded); ?>
 <?php if (!$embedded): ?>
-<body class="hold-transition sidebar-mini sidebar-collapse">
+<body class="hold-transition sidebar-mini">
 <div class="wrapper">
     <?php $this->load->view('partial/main/navbar') ?>
     <?php $this->load->view('partial/main/sidebar') ?>

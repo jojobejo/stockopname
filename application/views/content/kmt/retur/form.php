@@ -1,5 +1,5 @@
 <!-- views/content/kmt/retur/form.php -->
-<body class="hold-transition sidebar-mini sidebar-collapse">
+<body class="hold-transition sidebar-mini">
 <div class="wrapper">
     <div class="preloader flex-column justify-content-center align-items-center">
         <img class="animation__shake" src="<?= base_url('assets/images/Karisma.png') ?>" height="150" width="300">

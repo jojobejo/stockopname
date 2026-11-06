@@ -20,7 +20,7 @@ $buildHistoryUrl = static function ($page) use ($search) {
     return base_url('stockopname/history-input') . '?' . http_build_query($params);
 };
 ?>
-<body class="hold-transition sidebar-mini sidebar-collapse">
+<body class="hold-transition sidebar-mini">
 <div class="wrapper">
     <div class="preloader flex-column justify-content-center align-items-center">
         <img class="animation__shake" src="<?php echo base_url('assets/images/Karisma.png') ?>" alt="Karisma Logo" height="150" width="300">

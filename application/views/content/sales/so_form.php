@@ -14,7 +14,7 @@
         return str_replace(['\\','\'',"\r","\n","\t"], ['\\\\',"\\'", '','',''], (string)$v);
     }
 ?>
-<body class="hold-transition sidebar-mini sidebar-collapse">
+<body class="hold-transition sidebar-mini">
 <div class="wrapper">
 
     <div class="preloader flex-column justify-content-center align-items-center">

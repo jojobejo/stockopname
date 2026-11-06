@@ -1,4 +1,4 @@
-<body class="hold-transition sidebar-mini sidebar-collapse">
+<body class="hold-transition sidebar-mini">
     <div class="wrapper">
         <?php $this->load->view('partial/main/navbar') ?>
         <?php $this->load->view('partial/main/sidebar') ?>

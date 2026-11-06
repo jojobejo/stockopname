@@ -1,6 +1,6 @@
 (function () {
   'use strict';
-  var appUrl = 'https://10.10.10.26/stockopname/';
+  var appUrl = new URL('/stockopname/', window.location.origin).toString();
   var pendingPrompt = null;
 
   function hideInstallButtons() {

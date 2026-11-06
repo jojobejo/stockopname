@@ -24,7 +24,7 @@ $pageUrl = function ($page) use ($keyword) {
     return base_url('admin/stockopname/monitoring/pending-opname?' . http_build_query($query));
 };
 ?>
-<body class="hold-transition sidebar-mini sidebar-collapse">
+<body class="hold-transition sidebar-mini">
 <div class="wrapper">
     <?php $this->load->view('partial/main/navbar') ?>
     <?php $this->load->view('partial/main/sidebar') ?>
