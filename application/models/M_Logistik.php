@@ -1,4 +1,3 @@
-<!-- models/M_logistik.php -->
 <?php
 
 use JetBrains\PhpStorm\Internal\ReturnTypeContract;

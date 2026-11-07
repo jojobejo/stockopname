@@ -18,13 +18,14 @@
       $dynamicSidebarTree = $CI->sidebarMenuModel->sidebar_tree($CI->session->userdata('akses_lv_id') ?: $CI->session->userdata('lv'));
     }
 
-    $renderDynamicMenu = function ($menus) use (&$renderDynamicMenu) {
+    $activeSidebarPath = trim($CI->uri->uri_string(), '/');
+    $renderDynamicMenu = function ($menus) use (&$renderDynamicMenu, $activeSidebarPath) {
       foreach ($menus as $menu) {
         $hasChildren = !empty($menu['children']);
         $url = $hasChildren ? '#' : base_url($menu['url']);
         ?>
         <li class="nav-item <?= $hasChildren ? 'has-treeview' : '' ?>">
-          <a href="<?= $url ?>" class="nav-link">
+          <a href="<?= $url ?>" class="nav-link <?= (!$hasChildren && trim((string)$menu['url'], '/') === $activeSidebarPath) ? 'active' : '' ?>">
             <i class="nav-icon <?= html_escape($menu['icon'] ?: 'fas fa-circle') ?>"></i>
             <p>
               <?= html_escape($menu['nama_menu']) ?>

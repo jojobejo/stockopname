@@ -1,7 +1,7 @@
 <?php defined('BASEPATH') or exit('No direct script access allowed'); ?>
 <?php $embedded = !empty($embedded); ?>
 <?php if (!$embedded): ?>
-<body class="hold-transition sidebar-mini">
+<body class="hold-transition sidebar-mini sidebar-collapse">
 <div class="wrapper">
     <?php $this->load->view('partial/main/navbar') ?>
     <?php $this->load->view('partial/main/sidebar') ?>
@@ -30,6 +30,8 @@
                 <div id="masterBarangError" class="alert alert-danger" role="alert" style="display:none"></div>
                 <p class="text-muted">Hanya barang dengan total Qty Lot lebih dari 0. Tanda * pada nama dihapus. Satu baris untuk setiap nama barang dan expired date; bila terdapat beberapa kode, kode berawalan Q diprioritaskan untuk dimensi dan QR.</p>
                 <div class="form-group d-flex align-items-center flex-wrap" style="gap:8px">
+                    <button type="button" class="btn btn-primary btn-sm" id="generateAllCatalogQr">Generate All QR Code</button>
+                    <span id="generateAllProgress" role="status" class="small text-muted"></span>
                     <label for="filterQrStatus" class="mb-0">Status QR</label>
                     <select id="filterQrStatus" class="form-control form-control-sm" style="max-width:210px">
                         <option value="">Semua</option><option value="generated">Sudah digenerate</option><option value="not_generated">Belum digenerate</option>
@@ -71,16 +73,52 @@
 <script>
 window.addEventListener('load', function () {
     var refreshBusy = false;
-    var autoRefreshAttempted = false;
+    var refreshNextDraw = false;
     var selectedRow = null;
     var selectedVariant = null;
     var selectedCards = {};
     var readyCount = 0;
     var listUrl = '<?= base_url('admin/stockopname/master_barang/list') ?>';
     var printUrl = '<?= base_url('admin/stockopname/master_barang/print-kartu-stock') ?>';
+    var actionToken = '<?= html_escape($master_action_token ?? '') ?>';
+    $('#generateAllCatalogQr').on('click', function () {
+        var button = $(this), offset = 0, counts = {success: 0, skipped: 0, failed: 0}, errors = [];
+        button.prop('disabled', true);
+        function next() {
+            $.post('<?= base_url('admin/stockopname/master_barang/generate-all-qrcode') ?>', {offset: offset, action_token: actionToken}, null, 'json')
+                .done(function (res) {
+                    if (!res.status) { alertMessage('error', res.message); button.prop('disabled', false); return; }
+                    var data = res.data || {};
+                    Object.keys(counts).forEach(function (key) { counts[key] += Number((data.counts || {})[key] || 0); });
+                    errors = errors.concat(data.errors || []);
+                    offset = Number(data.next_offset || 0);
+                    $('#generateAllProgress').text(offset + ' / ' + data.total + ' · Berhasil: ' + counts.success + ' · Dilewati: ' + counts.skipped + ' · Gagal: ' + counts.failed);
+                    if (offset < Number(data.total || 0)) { window.setTimeout(next, 0); }
+                    else { button.prop('disabled', false); table.ajax.reload(null, false); if (errors.length) { showGenerateErrors(errors, counts); } }
+                }).fail(function () { button.prop('disabled', false); alertMessage('error', 'Batch terputus. Jalankan kembali; QR tersimpan akan dilewati.'); });
+        }
+        next();
+    });
     function alertMessage(icon, message) {
         if (typeof Swal !== 'undefined') { Swal.fire({icon: icon, text: message}); }
         else { window.alert(message); }
+    }
+    function showGenerateErrors(errors, counts) {
+        var unique = [];
+        var seen = {};
+        errors.forEach(function (message) {
+            if (!seen[message]) { seen[message] = true; unique.push(message); }
+        });
+        var list = '<ol class="text-left mb-0 pl-4" style="max-height:320px;overflow-y:auto;overflow-wrap:anywhere;padding-right:12px">' +
+            unique.map(function (message) { return '<li class="mb-2 pl-1">' + esc(message) + '</li>'; }).join('') + '</ol>';
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({icon: 'warning', title: 'Hasil Generate QR Code', width: 680,
+                html: '<p class="text-muted mb-3">Berhasil: ' + counts.success + ' · Dilewati: ' + counts.skipped + ' · Gagal: ' + counts.failed + '</p>' + list,
+                confirmButtonText: 'Tutup'});
+        } else {
+            window.alert('Hasil Generate QR Code\nBerhasil: ' + counts.success + ' · Dilewati: ' + counts.skipped + ' · Gagal: ' + counts.failed + '\n\n' +
+                unique.map(function (message, index) { return (index + 1) + '. ' + message; }).join('\n'));
+        }
     }
     function esc(value) { return $('<div>').text(value === null || value === undefined ? '' : String(value)).html(); }
     function displayNumber(value) { return value === null || value === undefined ? '-' : esc(value); }
@@ -142,6 +180,8 @@ window.addEventListener('load', function () {
             data: function (request) {
                 request.search = request.search.value;
                 request.qrcode_status = $('#filterQrStatus').val();
+                request.refresh = refreshNextDraw ? '1' : '0';
+                refreshNextDraw = false;
             },
             dataSrc: function (response) {
                 $('#masterBarangError').hide().text('');
@@ -154,15 +194,23 @@ window.addEventListener('load', function () {
                     $('#allReadyCount').text(readyCount);
                     $('#printAllCards').prop('disabled', readyCount === 0);
                 }
-                if (response.stale && !autoRefreshAttempted && !refreshBusy) {
-                    autoRefreshAttempted = true;
-                    window.setTimeout(function () { refreshCatalog(false); }, 0);
+                if (response.stale) {
+                    $('#catalogSyncStatus').text('Cache lama; Zahir belum terverifikasi');
+                    $('#masterBarangError').text('Sumber Zahir belum terverifikasi. Klik Refresh untuk mengambil data terbaru.').show();
+                } else {
+                    $('#catalogSyncStatus').text(response.cached ? 'Data cache Zahir; belum diverifikasi saat ini' : 'Data Zahir terverifikasi');
                 }
                 return response.data || [];
             },
             error: function (xhr) {
                 var message = (xhr.responseJSON && xhr.responseJSON.error) || 'Koneksi data ZahirDigital gagal. Coba Refresh.';
                 $('#masterBarangError').text(message).show();
+                if (refreshBusy) {
+                    refreshBusy = false;
+                    $('#refreshMasterBarang').prop('disabled', false);
+                    $('#catalogSyncStatus').text('Pembaruan Zahir gagal');
+                    alertMessage('error', message);
+                }
             }
         },
         columns: [
@@ -188,14 +236,19 @@ window.addEventListener('load', function () {
                 if (type !== 'display') { return row.qrcode_status; }
                 return row.variants.map(function (variant) {
                     if (variant.qrcode_url) { return '<div class="text-muted small">' + esc(variant.kode_barang) + ': siap</div>'; }
+                    if (variant.qrcode_status === 'not_in_local' || variant.qrcode_status === 'name_mismatch' || variant.qrcode_status === 'unverified') { return '<div class="text-muted small">' + esc(variant.kode_barang) + ': verifikasi data dahulu</div>'; }
                     return '<button type="button" class="btn btn-outline-primary btn-xs generate-catalog-qr m-1" data-id="' + esc(variant.catalog_id || '') + '" data-code="' + esc(variant.kode_barang) + '" data-name="' + esc(variant.nama_barang) + '" data-expired="' + esc(variant.expired_date) + '">Generate ' + esc(variant.kode_barang) + '</button>';
                 }).join('');
             }},
             {data: 'qrcode_status', render: function (value, type, row) {
                 if (type !== 'display') { return value; }
-                if (value === 'generated') { return '<span class="badge badge-success">QR siap</span>'; }
-                if (value === 'partial') { return '<span class="badge badge-warning">Sebagian QR siap</span>'; }
-                return '<span class="badge badge-secondary">Belum digenerate</span>';
+                return (row.variants || []).map(function (variant) {
+                    var labels = {generated: 'QR siap', not_generated: 'QR belum dibuat', file_missing: 'File QR hilang',
+                        not_in_local: 'Barang lokal tidak ditemukan', name_mismatch: 'Nama barang berbeda', unverified: 'Sumber Zahir belum terverifikasi'};
+                    var badge = variant.qrcode_status === 'generated' ? 'success' : 'warning';
+                    return '<div class="mb-2"><span class="badge badge-' + badge + '">' + esc(variant.kode_barang) + ': ' + esc(labels[variant.qrcode_status] || 'Belum terverifikasi') + '</span>' +
+                        '<div class="small text-muted">' + esc(variant.qrcode_reason || '') + '</div></div>';
+                }).join('');
             }}
         ],
         drawCallback: function () {
@@ -282,19 +335,20 @@ window.addEventListener('load', function () {
         refreshBusy = true;
         $('#refreshMasterBarang').prop('disabled', true);
         $('#catalogSyncStatus').text('Memperbarui data Zahir...');
-        $.getJSON(listUrl, {draw: 1, start: 0, length: 1, refresh: '1'})
-            .done(function () {
-                $('#catalogSyncStatus').text('Data terbaru siap');
-                table.ajax.reload(null, false);
+        refreshNextDraw = true;
+        table.ajax.reload(function (response) {
+            refreshBusy = false;
+            $('#refreshMasterBarang').prop('disabled', false);
+            if (response && !response.stale && !response.cached) {
+                $('#catalogSyncStatus').text('Data Zahir terbaru siap');
                 if (showAlert) { alertMessage('success', 'Data ZahirDigital berhasil diperbarui.'); }
-            })
-            .fail(function (xhr) {
-                var message = (xhr.responseJSON && xhr.responseJSON.error) || 'Gagal memperbarui data ZahirDigital.';
-                $('#catalogSyncStatus').text('Pembaruan gagal');
-                if (showAlert) { alertMessage('error', message); }
-            })
-            .always(function () { refreshBusy = false; $('#refreshMasterBarang').prop('disabled', false); });
+            } else {
+                $('#catalogSyncStatus').text('Pembaruan Zahir gagal');
+                if (showAlert) { alertMessage('error', (response && response.error) || 'Sumber Zahir belum terverifikasi. Coba Refresh kembali.'); }
+            }
+        }, false);
     }
+    window.refreshStockopnameZahirCatalog = refreshCatalog;
     $('#refreshMasterBarang').on('click', function () { refreshCatalog(true); });
 });
 </script>

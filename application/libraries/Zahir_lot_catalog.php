@@ -40,6 +40,7 @@ class Zahir_lot_catalog
             'status' => true,
             'data' => $rows,
             'stale' => !empty($lots['stale']) || !empty($dimensions['stale']),
+            'cached' => !empty($lots['cached']) || !empty($dimensions['cached']),
         ];
     }
 
@@ -48,7 +49,7 @@ class Zahir_lot_catalog
         if (!$refresh && is_file($file)) {
             $data = json_decode(file_get_contents($file), true);
             if (is_array($data)) {
-                return ['status' => true, 'data' => $data, 'stale' => filemtime($file) <= time() - 300];
+                return ['status' => true, 'data' => $data, 'stale' => filemtime($file) <= time() - 300, 'cached' => true];
             }
         }
         $result = $this->$fetchMethod();

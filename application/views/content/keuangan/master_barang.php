@@ -40,10 +40,15 @@
                         </div>
                         <div class="card-body">
                             <div class="mb-3 text-right">
+                                <?php if (in_array($this->session->userdata('jobdesk'), ['ADMINKEU', 'ADMINKEUTC', 'ADMINPURCHASING'], true)) : ?>
+                                <input type="file" id="fileImportMasterBarang" accept=".xlsx,.xls" aria-label="File Excel Master Barang">
+                                <button type="button" class="btn btn-primary" id="btnImportMasterBarang">Impor Excel</button>
                                 <button type="button" class="btn btn-success" id="btnTambahMasterBarang">
                                     <i class="fas fa-plus mr-1"></i> Tambah Barang
                                 </button>
+                                <?php endif; ?>
                             </div>
+                            <div id="hasilImportMasterBarang" class="mb-2" role="status"></div>
                             <table id="tb_master_barang" class="table table-bordered table-striped" style="text-align: center; width: 100%;">
                                 <thead>
                                     <tr>
@@ -104,19 +109,19 @@
                             </div>
                             <div class="col-md-6 form-group">
                                 <label for="bahan_aktif">Bahan Aktif</label>
-                                <input type="text" class="form-control" id="bahan_aktif" name="bahan_aktif">
+                                <input type="text" class="form-control" id="bahan_aktif" name="bahan_aktif" readonly value="-">
                             </div>
                             <div class="col-md-6 form-group">
                                 <label for="satuan">Satuan</label>
-                                <input type="text" class="form-control" id="satuan" name="satuan">
+                                <input type="text" class="form-control" id="satuan" name="satuan" readonly value="-">
                             </div>
                             <div class="col-md-6 form-group">
                                 <label for="berat">Berat</label>
-                                <input type="number" step="any" class="form-control" id="berat" name="berat">
+                                <input type="number" step="any" class="form-control" id="berat" name="berat" readonly value="0">
                             </div>
                             <div class="col-md-6 form-group">
                                 <label for="kubikasi">Kubikasi</label>
-                                <input type="number" step="any" class="form-control" id="kubikasi" name="kubikasi">
+                                <input type="number" step="any" class="form-control" id="kubikasi" name="kubikasi" readonly value="0">
                             </div>
                             <div class="col-md-4 form-group">
                                 <label for="p">P</label>

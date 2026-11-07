@@ -95,6 +95,19 @@ class C_Stockopname extends CI_Controller
         return $date && $date->format('Y-m-d') === $value;
     }
 
+    private function master_action_token()
+    {
+        $token = $this->session->userdata('master_action_token');
+        if (!$token) { $token = bin2hex(random_bytes(32)); $this->session->set_userdata('master_action_token', $token); }
+        return $token;
+    }
+
+    private function master_action_allowed()
+    {
+        return strtoupper((string)$this->input->method(true)) === 'POST'
+            && hash_equals($this->master_action_token(), (string)$this->input->post('action_token', true));
+    }
+
     private function clean_asset_filename($value)
     {
         $value = preg_replace('/[^A-Za-z0-9_-]+/', '_', trim((string)$value));
@@ -1483,10 +1496,11 @@ class C_Stockopname extends CI_Controller
         $data['table_title'] = 'Data Master Opname';
         $data['route_base'] = 'admin/stockopname/master_opname';
         $data['qrcode_route_base'] = 'admin/stockopname/qrcode';
-        $data['qty_zero_count'] = $this->stockopname->count_all_master_barang('zero');
+        $data['qty_zero_count'] = 0;
         $data['show_qty_zero_widget'] = true;
         $data['show_reset_qrcode'] = true;
         $data['show_stock_card_range_print'] = true;
+        $data['master_action_token'] = $this->master_action_token();
         $this->stockopname->ensure_qrcode_columns();
 
         $this->load->view('partial/main/header.php', $data);
@@ -1559,18 +1573,63 @@ class C_Stockopname extends CI_Controller
         if (!$this->valid_date($expiredDate)) {
             return ['status' => false, 'message' => 'Expired date Data Master Barang wajib dipilih.'];
         }
-        $matched = $this->scan_master_barang_item($row, $expiredDate);
-        if (empty($matched['status'])) { return $matched; }
         $row['expired_date'] = $expiredDate;
         $path = $this->catalog_qrcode_path($id, $expiredDate);
+        if (!$this->stockopname->ensure_catalog_qrcode_storage()) { return ['status' => false, 'message' => 'Penyimpanan QR database tidak tersedia.']; }
+        $saved = $this->stockopname->catalog_qrcode_saved($id, $expiredDate);
+        if ($saved) {
+            return is_file(FCPATH . $saved['qrcode_file'])
+                ? ['status' => true, 'barang' => $row, 'path' => $saved['qrcode_file'], 'skipped' => true]
+                : ['status' => false, 'message' => 'QR tersimpan tetapi file tidak ditemukan; periksa file sebelum mencoba lagi.'];
+        }
+        $matched = $this->scan_master_barang_item($row, $expiredDate);
+        if (empty($matched['status'])) { return $matched; }
         try {
-            if (!$this->karisma_code_generator->qrcode('MB|' . $id . '|' . $expiredDate, FCPATH . $path)) {
+            if (!is_file(FCPATH . $path) && !$this->karisma_code_generator->qrcode('MB|' . $id . '|' . $expiredDate, FCPATH . $path)) {
                 throw new RuntimeException('QRCode gagal dibuat.');
             }
+            if (!$this->stockopname->save_catalog_qrcode_variant($id, $expiredDate, 'MB|' . $id . '|' . $expiredDate, $path)) {
+                throw new RuntimeException('Penyimpanan QR database gagal.');
+            }
+            $this->stockopname->save_catalog_qrcode($id, $path);
             return ['status' => true, 'barang' => $row, 'path' => $path];
         } catch (Throwable $e) {
-            return ['status' => false, 'message' => 'Gagal membuat QR barang. Periksa library QR dan izin folder assets/qrcode.'];
+            return ['status' => false, 'message' => 'Gagal membuat atau menyimpan QR barang: ' . $e->getMessage()];
         }
+    }
+
+    public function ajax_generate_all_catalog_qrcode()
+    {
+        if (!$this->master_action_allowed()) { return $this->json(false, 'Request atau token keamanan tidak valid.'); }
+        $offset = max(0, (int)$this->input->post('offset', true));
+        $this->load->library('Zahir_lot_catalog');
+        $source = $this->zahir_lot_catalog->rows(false);
+        if (empty($source['status'])) { return $this->json(false, $source['message'] ?? 'Data Zahir tidak tersedia.'); }
+        $rows = $source['data'];
+        $total = count($rows);
+        $batch = array_slice($rows, $offset, 10);
+        $counts = ['success' => 0, 'skipped' => 0, 'failed' => 0];
+        $errors = [];
+        foreach ($batch as $item) {
+            $local = $this->stockopname->catalog_item(0, $item['kode_barang']);
+            if (!$local && !empty($item['p']) && !empty($item['l']) && !empty($item['t'])) {
+                $created = $this->stockopname->create_master_barang_catalog([
+                    'kd_barang' => $item['kode_barang'], 'nama_barang' => $item['nama_barang'],
+                    'p' => (int)$item['p'], 'l' => (int)$item['l'], 't' => (int)$item['t'],
+                ]);
+                $local = $this->stockopname->catalog_item(0, $item['kode_barang']);
+            }
+            if (!$local || $this->normalized_zahir_name($local['nama_barang']) !== $this->normalized_zahir_name($item['nama_barang'])) {
+                $counts['failed']++;
+                $errors[] = $item['kode_barang'] . ': Master Barang lokal tidak cocok atau belum tersedia.';
+                continue;
+            }
+            $result = $this->create_catalog_qrcode((int)$local['barang_id'], $item['expired_date']);
+            $key = empty($result['status']) ? 'failed' : (!empty($result['skipped']) ? 'skipped' : 'success');
+            $counts[$key]++;
+            if ($key === 'failed') { $errors[] = $item['kode_barang'] . ': ' . $result['message']; }
+        }
+        $this->json(true, 'Batch selesai.', ['total' => $total, 'next_offset' => min($total, $offset + count($batch)), 'counts' => $counts, 'errors' => array_slice($errors, 0, 10)]);
     }
 
     public function ajax_generate_catalog_qrcode()
@@ -1650,10 +1709,75 @@ class C_Stockopname extends CI_Controller
     {
         $data['page_title'] = 'KARISMA ERP - Master Barang';
         $data['page_heading'] = 'Master Barang';
+        $data['master_action_token'] = $this->master_action_token();
 
         $this->load->view('partial/main/header.php', $data);
         $this->load->view('content/admin/stockopname_master_barang_catalog.php', $data);
         $this->load->view('partial/main/footer.php');
+    }
+
+    public function ajax_import_master_opname()
+    {
+        if (!$this->master_action_allowed()) { return $this->json(false, 'Request atau token keamanan tidak valid.'); }
+        $source = (string)$this->input->post('input_source', true);
+        if (!in_array($source, ['opname_master', 'opname_it'], true)) { return $this->json(false, 'Sumber impor tidak valid.'); }
+        $label = $source === 'opname_it' ? 'Opname IT' : 'Opname Master';
+        if (empty($_FILES['file']['tmp_name']) || !is_uploaded_file($_FILES['file']['tmp_name']) || $_FILES['file']['size'] > 5242880 || strtolower(pathinfo($_FILES['file']['name'], PATHINFO_EXTENSION)) !== 'csv') {
+            return $this->json(false, 'Pilih berkas CSV maksimal 5 MB.');
+        }
+        $handle = fopen($_FILES['file']['tmp_name'], 'rb');
+        if (!$handle) { return $this->json(false, 'Berkas impor tidak dapat dibaca.'); }
+        $header = fgetcsv($handle);
+        $expected = ['kode_barang', 'nama_barang', 'qty', 'qty_box', 'qty_pcs', 'expired_date'];
+        if ($header) { $header[0] = preg_replace('/^\xEF\xBB\xBF/', '', $header[0]); }
+        $header = array_map('trim', $header ?: []);
+        if ($header !== $expected) { fclose($handle); return $this->json(false, 'Header harus tepat: ' . implode(', ', $expected)); }
+        $fields = $this->stockopname->master_import_fields();
+        $rows = []; $errors = []; $line = 1;
+        while (($values = fgetcsv($handle)) !== false) {
+            $line++;
+            if (count($values) === 1 && trim($values[0]) === '') { continue; }
+            if (count($values) !== 6) { $errors[] = 'Baris ' . $line . ': jumlah kolom harus 6.'; continue; }
+            $values = array_map('trim', $values);
+            if ($values[0] === '' || mb_strlen($values[0]) > 50 || $values[1] === '') { $errors[] = 'Baris ' . $line . ': kode atau nama barang kosong / kode terlalu panjang.'; continue; }
+            $bad = false;
+            foreach ([2, 3, 4] as $index) { if (!ctype_digit($values[$index]) || (float)$values[$index] > 2147483647) { $bad = true; } }
+            if ($bad || !$this->valid_date($values[5])) { $errors[] = 'Baris ' . $line . ': qty harus bilangan bulat 0..2147483647 dan expired_date YYYY-MM-DD valid.'; continue; }
+            $row = array_combine($expected, $values);
+            foreach (['qty', 'qty_box', 'qty_pcs'] as $field) { $row[$field] = (int)$row[$field]; }
+            $row['input_source'] = $source;
+            foreach ($fields as $field) {
+                if (array_key_exists($field->name, $row) || $field->name === 'id' || in_array($field->name, ['created_at', 'updated_at'], true)) { continue; }
+                if ($field->name === 'qrcode_status') { $row[$field->name] = 'PENDING'; continue; }
+                if (in_array($field->name, ['qrcode', 'barcode', 'qrcode_value', 'qrcode_file', 'qrcode_error_message', 'qrcode_generated_at', 'qrcode_updated_at', 'request_status'], true)) { continue; }
+                $row[$field->name] = preg_match('/int|decimal|float|double|bit/i', $field->type) ? 0 : '0';
+            }
+            $rows[] = $row;
+            if (count($rows) > 10000) { $errors[] = 'Berkas melebihi batas 10.000 baris.'; break; }
+        }
+        fclose($handle);
+        if ($errors) { return $this->json(false, $label . ': impor dibatalkan; perbaiki kesalahan berikut.', ['imported' => 0, 'errors' => array_slice($errors, 0, 30)]); }
+        if (!$rows) { return $this->json(false, $label . ': tidak ada baris data.'); }
+        if (!$this->stockopname->insert_master_import($rows)) { return $this->json(false, $label . ': gagal menyimpan data; transaksi dibatalkan.'); }
+        $this->json(true, $label . ': ' . count($rows) . ' baris berhasil diimpor.', ['source' => $source, 'imported' => count($rows), 'errors' => []]);
+    }
+
+    public function ajax_master_delete_count()
+    {
+        if (!$this->master_action_allowed()) { return $this->json(false, 'Request atau token keamanan tidak valid.'); }
+        $scope = (string)$this->input->post('scope', true);
+        if (!in_array($scope, ['all', 'opname_master', 'opname_it'], true)) { return $this->json(false, 'Cakupan tidak valid.'); }
+        $this->json(true, 'Jumlah data ditemukan.', ['count' => $this->stockopname->master_delete_count($scope)]);
+    }
+
+    public function ajax_master_delete()
+    {
+        if (!$this->master_action_allowed()) { return $this->json(false, 'Request atau token keamanan tidak valid.'); }
+        $scope = (string)$this->input->post('scope', true);
+        if (!in_array($scope, ['all', 'opname_master', 'opname_it'], true)) { return $this->json(false, 'Cakupan tidak valid.'); }
+        $count = $this->stockopname->master_delete_count($scope);
+        if (!$this->stockopname->delete_master_scope($scope)) { return $this->json(false, 'Penghapusan gagal; periksa relasi data dan izin database.'); }
+        $this->json(true, $count . ' baris berhasil dihapus.', ['scope' => $scope, 'deleted' => $count]);
     }
 
     public function ajax_master_barang_catalog_list()
@@ -1668,7 +1792,11 @@ class C_Stockopname extends CI_Controller
             $this->output->set_status_header(502);
             return $this->raw_json(['draw' => $draw, 'recordsTotal' => 0, 'recordsFiltered' => 0, 'data' => [], 'error' => $result['message']]);
         }
-        $rows = $this->group_catalog_rows($this->catalog_rows_with_qrcode($result['data']));
+        if (!empty($result['stale'])) {
+            $this->output->set_status_header(502);
+            return $this->raw_json(['draw' => $draw, 'recordsTotal' => 0, 'recordsFiltered' => 0, 'data' => [], 'error' => 'Sumber Zahir belum dapat diverifikasi. Data cache tidak ditampilkan sebagai hasil terbaru. Klik Refresh.']);
+        }
+        $rows = $this->group_catalog_rows($this->catalog_rows_with_qrcode($result['data'], empty($result['stale']) && empty($result['cached'])));
         $total = count($rows);
         $generatedCount = 0;
         $cardCount = 0;
@@ -1696,6 +1824,7 @@ class C_Stockopname extends CI_Controller
             'recordsFiltered' => count($rows),
             'data' => array_slice($rows, $start, $length),
             'stale' => !empty($result['stale']),
+            'cached' => !empty($result['cached']),
             'widgets' => [
                 'total' => $total,
                 'qty_zero' => $this->stockopname->count_all_master_barang('zero'),
@@ -1729,7 +1858,7 @@ class C_Stockopname extends CI_Controller
                 return $variant['qrcode_status'] === 'generated';
             }));
             $group['qrcode_status'] = $ready === count($group['variants']) ? 'generated'
-                : ($ready > 0 ? 'partial' : 'not_generated');
+                : ($ready > 0 ? 'partial' : ($group['variants'][0]['qrcode_status'] ?? 'not_generated'));
             $group['qrcode_url'] = '';
             foreach ($group['variants'] as $variant) {
                 if ($variant['qrcode_url'] !== '') {
@@ -1746,18 +1875,27 @@ class C_Stockopname extends CI_Controller
         return $groups;
     }
 
-    private function catalog_rows_with_qrcode(array $rows)
+    private function catalog_rows_with_qrcode(array $rows, $sourceVerified = true)
     {
         $catalog = $this->stockopname->catalog_qrcode_by_codes(array_column($rows, 'kode_barang'));
+        $variants = $this->stockopname->catalog_qrcode_variants(array_column($catalog, 'id'));
         foreach ($rows as &$row) {
             $local = $catalog[strtoupper($row['kode_barang'])] ?? null;
             $row['catalog_id'] = $local ? (int)$local['id'] : 0;
             $path = $local && $this->valid_date($row['expired_date'])
                 ? $this->catalog_qrcode_path((int)$local['id'], $row['expired_date']) : '';
-            $ready = $path !== '' && is_file(FCPATH . $path)
-                && $this->normalized_zahir_name($local['nama_barang'] ?? '') === $this->normalized_zahir_name($row['nama_barang']);
-            $row['qrcode_url'] = $ready ? base_url($path) : '';
-            $row['qrcode_status'] = $ready ? 'generated' : 'not_generated';
+            $saved = $variants[(int)($local['id'] ?? 0) . '|' . $row['expired_date']] ?? null;
+            $nameMatches = $local && $this->normalized_zahir_name($local['nama_barang'] ?? '') === $this->normalized_zahir_name($row['nama_barang']);
+            $ready = $nameMatches && $saved && $saved['qrcode_file'] === $path && $saved['qrcode_value'] === 'MB|' . (int)$local['id'] . '|' . $row['expired_date'] && is_file(FCPATH . $path);
+            $row['qrcode_url'] = $sourceVerified && $ready ? base_url($path) : '';
+            $row['qrcode_status'] = !$sourceVerified ? 'unverified' : (!$local ? 'not_in_local'
+                : (!$nameMatches ? 'name_mismatch'
+                    : ($ready ? 'generated' : ($saved ? 'file_missing' : 'not_generated'))));
+            $row['qrcode_reason'] = !$sourceVerified ? 'Sumber Zahir sedang gagal diverifikasi; gunakan Refresh setelah pulih.'
+                : (!$local ? 'Kode barang Zahir tidak ditemukan pada Master Barang lokal.'
+                : (!$nameMatches ? 'Kode cocok, tetapi nama barang berbeda dari Master Barang lokal.'
+                    : ($ready ? 'Data sesuai dan file QR tersedia.'
+                        : ($saved ? 'QR tercatat, tetapi file QR hilang atau tidak sesuai.' : 'Data sesuai; QR untuk expired date ini belum dibuat.'))));
         }
         unset($row);
         return $rows;
@@ -1776,8 +1914,9 @@ class C_Stockopname extends CI_Controller
         }
         $this->load->library('Zahir_lot_catalog');
         $source = $this->zahir_lot_catalog->rows(false);
-        if (empty($source['status'])) {
-            show_error($source['message'] ?? 'Data Zahir tidak tersedia.', 502);
+        if (!empty($source['stale'])) { $source = $this->zahir_lot_catalog->rows(true); }
+        if (empty($source['status']) || !empty($source['stale'])) {
+            show_error($source['message'] ?? 'Sumber Zahir belum dapat diverifikasi.', 502);
             return;
         }
         $rows = $this->catalog_rows_with_qrcode($source['data']);
@@ -2091,7 +2230,7 @@ class C_Stockopname extends CI_Controller
         $this->load->library('Zahir_lot_catalog');
         $catalog = $this->zahir_lot_catalog->rows((string)$this->input->post('refresh_catalog', true) === '1');
         $byCode = null;
-        if (!empty($catalog['status'])) {
+        if (!empty($catalog['status']) && empty($catalog['stale']) && empty($catalog['cached'])) {
             $byCode = [];
             foreach ($catalog['data'] as $item) {
                 $code = strtoupper(trim((string)($item['kode_barang'] ?? '')));
@@ -2100,6 +2239,7 @@ class C_Stockopname extends CI_Controller
         }
         $result = $this->stockopname->get_master_barang_datatable($this->post(), $qtyMode, $byCode);
         $result['catalog_stale'] = !empty($catalog['stale']);
+        $result['catalog_cached'] = !empty($catalog['cached']);
         $result['catalog_error'] = empty($catalog['status']) ? ($catalog['message'] ?? 'Data Master Barang tidak tersedia.') : '';
         $this->raw_json($result);
     }

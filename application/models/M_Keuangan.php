@@ -361,9 +361,9 @@ class M_Keuangan extends CI_Model
     {
         $this->db->select("
             id,
-            COALESCE(kd_barang) AS kode_barang,
-            COALESCE(kode_barang_system) AS kode_barang_system,
-            COALESCE(nama_barang) AS nama_barang,
+            kd_barang AS kode_barang,
+            kode_barang_system AS kode_barang_system,
+            nama_barang AS nama_barang,
             COALESCE(bhn_aktif, '') AS bahan_aktif,
             COALESCE(satuan, '') AS satuan,
             COALESCE(berat, 0) AS berat,
@@ -374,8 +374,9 @@ class M_Keuangan extends CI_Model
 
         if ($search !== '') {
             $this->db->group_start();
-            $this->db->like('COALESCE(kd_barang, kode_barang_system)', $search, 'both', false);
-            $this->db->or_like('COALESCE(nama_barang)', $search, 'both', false);
+            $this->db->like('kd_barang', $search);
+            $this->db->or_like('kode_barang_system', $search);
+            $this->db->or_like('nama_barang', $search);
             $this->db->or_like('bhn_aktif', $search);
             $this->db->or_like('satuan', $search);
             $this->db->group_end();
@@ -435,7 +436,7 @@ class M_Keuangan extends CI_Model
     public function master_barang_all($limit = null, $offset = 0, $search = '')
     {
         $this->master_barang_base_query($search);
-        $this->db->order_by('COALESCE(nama_barang)', 'ASC', false);
+        $this->db->order_by('nama_barang', 'ASC');
 
         if ($limit !== null && (int)$limit > 0) {
             $this->db->limit((int)$limit, (int)$offset);
@@ -460,8 +461,8 @@ class M_Keuangan extends CI_Model
         return $this->db->query("
             SELECT
                 id,
-                COALESCE(kd_barang, kode_barang_system) AS kode_barang,
-                COALESCE(nama_barang) AS nama_barang,
+            kd_barang AS kode_barang,
+                nama_barang AS nama_barang,
                 COALESCE(bhn_aktif, '') AS bahan_aktif,
                 COALESCE(satuan, '') AS satuan,
                 COALESCE(berat, 0) AS berat,
@@ -477,19 +478,65 @@ class M_Keuangan extends CI_Model
 
     public function master_barang_store($input)
     {
-        $data = $this->build_master_barang_payload($input);
-        return $this->db->insert('tb_master_barang_all', $data);
+        return $this->master_barang_insert_many([$input]);
+    }
+
+    public function master_barang_exists($code, $exceptId = 0)
+    {
+        $this->db->where('kd_barang', $code);
+        if ($exceptId) $this->db->where('id !=', (int)$exceptId);
+        return $this->db->count_all_results('tb_master_barang_all') > 0;
+    }
+
+    public function master_barang_insert_many(array $rows)
+    {
+        $this->db->trans_begin();
+        // A named MySQL lock serializes code allocation across concurrent requests.
+        $lock = $this->db->query("SELECT GET_LOCK('stockopname_master_barang_kiubr', 15) AS locked")->row();
+        if (!$lock || (int)$lock->locked !== 1) {
+            $this->db->trans_rollback();
+            return false;
+        }
+        $ok = true;
+        $codes = $this->db->query("SELECT kode_barang_system FROM tb_master_barang_all WHERE kode_barang_system REGEXP '^KIUBR[0-9]+$'")->result_array();
+        $next = 0;
+        foreach ($codes as $code) $next = max($next, (int)substr($code['kode_barang_system'], 5));
+        foreach ($rows as $row) {
+            if ($this->master_barang_exists($row['kd_barang'])) { $ok = false; break; }
+            do { $next++; $system = 'KIUBR' . str_pad($next, 4, '0', STR_PAD_LEFT); }
+            while ($this->db->where('kode_barang_system', $system)->count_all_results('tb_master_barang_all'));
+            $row['kode_barang_system'] = $system;
+            if (!$this->db->insert('tb_master_barang_all', $row)) { $ok = false; break; }
+        }
+        if ($ok && $this->db->trans_status()) $this->db->trans_commit();
+        else { $this->db->trans_rollback(); $ok = false; }
+        $this->db->query("SELECT RELEASE_LOCK('stockopname_master_barang_kiubr')");
+        return $ok;
     }
 
     public function master_barang_update($id, $input)
     {
-        $data = $this->build_master_barang_payload($input);
-        return $this->db->where('id', (int)$id)->update('tb_master_barang_all', $data);
+        return $this->db->where('id', (int)$id)->update('tb_master_barang_all', $input);
     }
 
     public function master_barang_delete($id)
     {
         return $this->db->where('id', (int)$id)->delete('tb_master_barang_all');
+    }
+
+    public function master_barang_has_references($id, $code)
+    {
+        // Check real tables/columns in this installation, since legacy schemas vary.
+        $tables = ['stockopname_master_item', 'stockopname_opname', 'stockopname_manual_input', 'tb_po_barang', 'tbpo_barang', 'tb_stock', 'tb_mutasi_barang'];
+        foreach ($tables as $table) {
+            if (!$this->db->table_exists($table)) continue;
+            $fields = $this->db->list_fields($table);
+            foreach (['kd_barang', 'kode_barang'] as $field) {
+                if (in_array($field, $fields, true) && $this->db->where($field, $code)->count_all_results($table) > 0) return true;
+            }
+            if (in_array('master_barang_id', $fields, true) && $this->db->where('master_barang_id', $id)->count_all_results($table) > 0) return true;
+        }
+        return false;
     }
 
     private function master_customer_base_query($search = '')

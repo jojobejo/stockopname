@@ -3,7 +3,24 @@
         let mode = 'create';
         let currentId = 0;
         const hasSwal = typeof Swal !== 'undefined';
-        const endpointBase = "<?= base_url($this->uri->uri_string() === 'purchase/listBarang' ? 'purchase/listBarang' : 'master_barang') ?>";
+        const endpointBase = "<?= base_url($master_barang_endpoint ?? ($this->uri->uri_string() === 'purchase/listBarang' ? 'purchase/listBarang' : 'master_barang')) ?>";
+
+        $('#btnImportMasterBarang').on('click', function() {
+            const file = $('#fileImportMasterBarang')[0].files[0];
+            if (!file) return notify('warning', 'Perhatian', 'Pilih file Excel.');
+            const data = new FormData(); data.append('file', file);
+            $.ajax({url: endpointBase + '/import', type: 'POST', data: data, processData: false, contentType: false,
+                success: showImport, error: function(xhr) { showImport(xhr.responseJSON || {message: 'Impor gagal.'}); }});
+        });
+        function showImport(resp) {
+            const box = $('#hasilImportMasterBarang').empty();
+            $('<div>').addClass('alert ' + (resp.status ? 'alert-success' : 'alert-danger'))
+                .text((resp.message || '') + ' Berhasil: ' + (resp.berhasil || 0) + ', gagal: ' + (resp.gagal || 0)).appendTo(box);
+            (resp.errors || []).forEach(function(item) {
+                $('<div>').text('Baris ' + item.baris + ': ' + item.pesan).appendTo(box);
+            });
+            if (resp.status) table.ajax.reload(null, false);
+        }
 
         function notify(icon, title, text) {
             if (hasSwal) {
@@ -103,6 +120,14 @@
                     notify('error', 'Gagal', 'Gagal mengambil detail data.');
                 }
             });
+        });
+
+        $('#tb_master_barang').on('click', '.btn-view-master', function() {
+            $.post(endpointBase + '/detail', {id: $(this).data('id')}, function(resp) {
+                if (!resp.status) return notify('error', 'Gagal', resp.message || 'Data tidak ditemukan.');
+                const d = resp.data;
+                notify('info', d.nama_barang, 'Kode: ' + d.kode_barang + ' | P x L x T: ' + d.p + ' x ' + d.l + ' x ' + d.t);
+            }, 'json');
         });
 
         $('#formMasterBarang').on('submit', function(e) {

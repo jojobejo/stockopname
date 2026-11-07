@@ -599,7 +599,17 @@ class C_Keuangan extends CI_Controller
 
     public function master_barang()
     {
+        $this->master_barang_access();
         $data['page_title']         = 'KARISMA';
+
+        if (strpos($this->uri->uri_string(), 'admin/stockopname/') === 0) {
+            $data['master_barang_endpoint'] = 'admin/stockopname/master_barang/data';
+            $this->load->view('partial/main/header.php', $data);
+            $this->load->view('content/admin/stockopname_master_barang_local.php', $data);
+            $this->load->view('partial/main/footergdg.php');
+            $this->load->view('content/keuangan/ajax/ajax_master_barang.php', $data);
+            return;
+        }
 
         $this->load->view('partial/main/header.php', $data);
         $this->load->view('content/keuangan/master_barang.php', $data);
@@ -617,21 +627,48 @@ class C_Keuangan extends CI_Controller
 
     private function master_barang_payload()
     {
-        return [
-            'kode_barang' => trim((string)$this->input->post('kode_barang', true)),
-            'nama_barang' => trim((string)$this->input->post('nama_barang', true)),
-            'bahan_aktif' => trim((string)$this->input->post('bahan_aktif', true)),
-            'satuan'      => trim((string)$this->input->post('satuan', true)),
-            'berat'       => (float)$this->input->post('berat', true),
-            'kubikasi'    => (float)$this->input->post('kubikasi', true),
-            'p'           => (int)$this->input->post('p', true),
-            'l'           => (int)$this->input->post('l', true),
-            't'           => (int)$this->input->post('t', true),
-        ];
+        return $this->master_barang_validate([
+            $this->input->post('kode_barang', true), $this->input->post('nama_barang', true),
+            $this->input->post('p', true), $this->input->post('l', true), $this->input->post('t', true)
+        ]);
+    }
+
+    private function master_barang_access($write = false)
+    {
+        $role = $this->session->userdata('jobdesk');
+        $isAdmin = $this->session->userdata('logged_in') &&
+            ((bool)$this->session->userdata('is_admin_dashboard') ||
+             (strtolower((string)$this->session->userdata('username')) === 'admin') ||
+             ((int)$this->session->userdata('lv') === 1 && $role === 'ADMIN'));
+        if (strpos($this->uri->uri_string(), 'admin/stockopname/') === 0) {
+            if (!$isAdmin) show_error('Akses ditolak.', 403);
+            return;
+        }
+        if ($isAdmin) return;
+        $allowed = $write ? ['ADMINKEU', 'ADMINKEUTC', 'ADMINPURCHASING'] : ['ADMINKEU', 'ADMINKEUTC', 'ADMINPURCHASING', 'DIREKTUR', 'LOGISTIK'];
+        if (!in_array($role, $allowed, true)) show_error('Akses ditolak.', 403);
+    }
+
+    private function master_barang_validate($values)
+    {
+        if (count($values) !== 5) return false;
+        $code = trim((string)$values[0]); $name = trim((string)$values[1]);
+        if ($code === '' || strlen($code) > 25 || $name === '') return false;
+        $dimensions = [];
+        foreach ([2, 3, 4] as $i) {
+            $value = trim((string)$values[$i]);
+            if (!preg_match('/^[0-9]+$/', $value) || (float)$value > 999) return false;
+            $dimensions[] = (int)$value;
+        }
+        return ['kd_barang' => $code, 'nama_barang' => $name, 'p' => $dimensions[0], 'l' => $dimensions[1], 't' => $dimensions[2],
+            'dimensi' => $dimensions[0] * $dimensions[1] * $dimensions[2], 'barcode' => '-', 'qrcode' => '-',
+            'kd_supplier' => '-', 'bhn_aktif' => '-', 'satuan' => '-', 'berat' => 0, 'kubikasi' => 0,
+            'qty_min' => 0, 'id_gudang' => 0, 'id_wilayah' => 0, 'hpp' => 0];
     }
 
     public function master_barang_list()
     {
+        $this->master_barang_access();
         $draw   = (int)$this->input->post('draw');
         $start  = (int)$this->input->post('start');
         $length = (int)$this->input->post('length');
@@ -657,8 +694,10 @@ class C_Keuangan extends CI_Controller
                 'berat'       => $row->berat,
                 'kubikasi'    => $row->kubikasi,
                 'dimensi'     => $row->dimensi,
-                'aksi'        => '<button type="button" class="btn btn-sm btn-warning btn-edit-master mr-1" data-id="' . (int)$row->id . '"><i class="fas fa-pen"></i></button>
-                                  <button type="button" class="btn btn-sm btn-danger btn-delete-master" data-id="' . (int)$row->id . '" data-nama="' . html_escape($row->nama_barang) . '"><i class="fas fa-trash"></i></button>',
+                'aksi'        => '<button type="button" class="btn btn-sm btn-info btn-view-master mr-1" data-id="' . (int)$row->id . '">Detail</button>' .
+                    (in_array($this->session->userdata('jobdesk'), ['ADMINKEU', 'ADMINKEUTC', 'ADMINPURCHASING'], true) || strpos($this->uri->uri_string(), 'admin/stockopname/') === 0
+                    ? '<button type="button" class="btn btn-sm btn-warning btn-edit-master mr-1" data-id="' . (int)$row->id . '"><i class="fas fa-pen"></i></button>
+                       <button type="button" class="btn btn-sm btn-danger btn-delete-master" data-id="' . (int)$row->id . '" data-nama="' . html_escape($row->nama_barang) . '"><i class="fas fa-trash"></i></button>' : ''),
             ];
         }
 
@@ -672,6 +711,7 @@ class C_Keuangan extends CI_Controller
 
     public function master_barang_detail()
     {
+        $this->master_barang_access();
         $id = (int)$this->input->post('id', true);
         if ($id <= 0) {
             return $this->response_json([
@@ -696,13 +736,17 @@ class C_Keuangan extends CI_Controller
 
     public function master_barang_store()
     {
+        $this->master_barang_access(true);
         $payload = $this->master_barang_payload();
-        if ($payload['kode_barang'] === '' || $payload['nama_barang'] === '') {
+        if (!$payload) {
             return $this->response_json([
                 'status' => false,
                 'message' => 'Kode barang dan nama barang wajib diisi.',
             ], 422);
         }
+
+        if ($this->M_Keuangan->master_barang_exists($payload['kd_barang']))
+            return $this->response_json(['status' => false, 'message' => 'Kode barang sudah ada.'], 422);
 
         $ok = $this->M_Keuangan->master_barang_store($payload);
 
@@ -714,6 +758,7 @@ class C_Keuangan extends CI_Controller
 
     public function master_barang_update()
     {
+        $this->master_barang_access(true);
         $id = (int)$this->input->post('id', true);
         if ($id <= 0) {
             return $this->response_json([
@@ -723,14 +768,17 @@ class C_Keuangan extends CI_Controller
         }
 
         $payload = $this->master_barang_payload();
-        if ($payload['kode_barang'] === '' || $payload['nama_barang'] === '') {
+        if (!$payload) {
             return $this->response_json([
                 'status' => false,
                 'message' => 'Kode barang dan nama barang wajib diisi.',
             ], 422);
         }
 
-        $ok = $this->M_Keuangan->master_barang_update($id, $payload);
+        if (!$this->M_Keuangan->master_barang_by_id($id)) return $this->response_json(['status' => false, 'message' => 'Data tidak ditemukan.'], 404);
+        if ($this->M_Keuangan->master_barang_exists($payload['kd_barang'], $id)) return $this->response_json(['status' => false, 'message' => 'Kode barang sudah ada.'], 422);
+        // Preserve fields outside the manual form, including the generated system code.
+        $ok = $this->M_Keuangan->master_barang_update($id, array_intersect_key($payload, array_flip(['kd_barang', 'nama_barang', 'p', 'l', 't', 'dimensi'])));
 
         $this->response_json([
             'status' => (bool)$ok,
@@ -740,6 +788,7 @@ class C_Keuangan extends CI_Controller
 
     public function master_barang_delete()
     {
+        $this->master_barang_access(true);
         $id = (int)$this->input->post('id', true);
         if ($id <= 0) {
             return $this->response_json([
@@ -748,12 +797,54 @@ class C_Keuangan extends CI_Controller
             ], 422);
         }
 
+        $detail = $this->M_Keuangan->master_barang_by_id($id);
+        if (!$detail) return $this->response_json(['status' => false, 'message' => 'Data tidak ditemukan.'], 404);
+        if ($this->M_Keuangan->master_barang_has_references($id, $detail->kode_barang))
+            return $this->response_json(['status' => false, 'message' => 'Barang sudah dipakai pada data lain dan tidak dapat dihapus.'], 409);
         $ok = $this->M_Keuangan->master_barang_delete($id);
 
         $this->response_json([
             'status' => (bool)$ok,
             'message' => $ok ? 'Data master barang berhasil dihapus.' : 'Gagal menghapus data.',
         ], $ok ? 200 : 500);
+    }
+
+    public function master_barang_import()
+    {
+        $this->master_barang_access(true);
+        if (empty($_FILES['file']['tmp_name']) || !is_uploaded_file($_FILES['file']['tmp_name']))
+            return $this->response_json(['status' => false, 'message' => 'Pilih file Excel.'], 422);
+        $extension = strtolower(pathinfo($_FILES['file']['name'], PATHINFO_EXTENSION));
+        if (!in_array($extension, ['xlsx', 'xls'], true) || $_FILES['file']['size'] > 5 * 1024 * 1024)
+            return $this->response_json(['status' => false, 'message' => 'File harus XLSX/XLS maksimal 5 MB.'], 422);
+        require_once APPPATH . 'third_party/PhpSpreadsheet/src/Bootstrap.php';
+        try {
+            $reader = \PhpOffice\PhpSpreadsheet\IOFactory::createReaderForFile($_FILES['file']['tmp_name']);
+            $reader->setReadDataOnly(true);
+            $sheet = $reader->load($_FILES['file']['tmp_name'])->getActiveSheet();
+            $last = $sheet->getHighestDataRow();
+            $header = $sheet->rangeToArray('A1:E1', null, true, false)[0];
+            if ($header !== ['kd_barang', 'nama_barang', 'p', 'l', 't'] || $sheet->getHighestDataColumn() !== 'E')
+                return $this->response_json(['status' => false, 'message' => 'Header harus persis: kd_barang,nama_barang,p,l,t'], 422);
+            $rows = []; $errors = []; $seen = [];
+            for ($line = 2; $line <= $last; $line++) {
+                $values = $sheet->rangeToArray('A' . $line . ':E' . $line, null, true, false)[0];
+                if (count(array_filter($values, function ($v) { return trim((string)$v) !== ''; })) === 0) { $errors[] = ['baris' => $line, 'pesan' => 'Baris kosong.']; continue; }
+                $row = $this->master_barang_validate($values);
+                if (!$row) { $errors[] = ['baris' => $line, 'pesan' => 'Kode, nama, atau dimensi tidak valid (bilangan bulat 0-999).']; continue; }
+                $key = mb_strtolower($row['kd_barang']);
+                if (isset($seen[$key])) { $errors[] = ['baris' => $line, 'pesan' => 'Duplikat kode pada baris ' . $seen[$key] . '.']; continue; }
+                $seen[$key] = $line;
+                if ($this->M_Keuangan->master_barang_exists($row['kd_barang'])) { $errors[] = ['baris' => $line, 'pesan' => 'Kode sudah ada di database.']; continue; }
+                $rows[] = $row;
+            }
+            if (!$rows && !$errors) $errors[] = ['baris' => 2, 'pesan' => 'File tidak berisi data.'];
+            if ($errors) return $this->response_json(['status' => false, 'message' => 'Impor dibatalkan; tidak ada data disimpan.', 'berhasil' => 0, 'gagal' => count($errors), 'errors' => $errors], 422);
+            $ok = $this->M_Keuangan->master_barang_insert_many($rows);
+            return $this->response_json(['status' => $ok, 'message' => $ok ? 'Impor berhasil.' : 'Impor dibatalkan karena benturan kode atau kegagalan database.', 'berhasil' => $ok ? count($rows) : 0, 'gagal' => $ok ? 0 : count($rows), 'errors' => []], $ok ? 200 : 409);
+        } catch (\Exception $e) {
+            return $this->response_json(['status' => false, 'message' => 'File Excel tidak dapat dibaca.'], 422);
+        }
     }
 
     public function master_customer()
