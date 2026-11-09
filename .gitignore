@@ -36,3 +36,5 @@ user_guide_src/cilexer/pycilexer.egg-info/*
 # New raw database dumps/backups are not source migrations.
 /db/*.sql
 /database/backups/
+# Explicit database export requested for versioning.
+!/db/kiucoid_karismaerp(1).sql
