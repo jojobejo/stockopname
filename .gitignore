@@ -30,3 +30,9 @@ user_guide_src/cilexer/pycilexer.egg-info/*
 *.sublime-project
 /tests/tests/
 /tests/results/
+# Runtime uploads and generated QR assets stay local.
+/assets/qrcode/
+/uploads/
+# New raw database dumps/backups are not source migrations.
+/db/*.sql
+/database/backups/

@@ -1,0 +1,13 @@
+# Impor CSV langsung dan modal ringkas - 10 November 2026
+
+Permintaan pengguna mengganti alur UI preview/konfirmasi menjadi pilih CSV lalu **Impor sekarang**. Pesan belum ada data sebelumnya merujuk ke referensi tersimpan, sehingga tetap muncul meskipun file baru sudah dipilih. Modal baru tidak menampilkan empty state referensi maupun metadata teknis tersebut.
+
+File picker menampilkan nama file dan ukuran/status siap; tombol mengikuti validitas pilihan, kembali nonaktif jika file dibatalkan, dan ditahan selama request. Client menolak ekstensi selain CSV, file kosong dan ukuran di atas5MiB. Pemilihan baru menyembunyikan hasil file sebelumnya, bukan menampilkan status database sebagai status pilihan file. Aset JavaScript diberi versi baru agar browser tidak mempertahankan handler lama.
+
+Satu POST operation=import mengirim file melalui FormData ke route yang sama. Controller tetap memvalidasi semua row, menghitung rencana internal/fingerprint, mencatat validated dan memanggil transaksi commit dengan pengecekan ulang/lock yang sudah ada. Rencana internal bukan halaman preview atau request kedua. Jika error/konflik/keadaan berubah, impor dibatalkan; sumber aktif lama tetap. Tidak membuat staging preview baru pada jalur langsung. Jalur preview/commit lama tetap tersedia untuk kompatibilitas, tidak digunakan formulir baru.
+
+Tombol Impor sekarang merupakan persetujuan penggantian katalog berdasarkan file lengkap yang dipilih; informasi ini ditulis singkat di bawah picker. Tidak ada checkbox full/konfirmasi tambahan pada alur baru sesuai instruksi pengguna. Batas bisnis tidak berubah: P/L/T diabaikan, ID/ukuran/QR existing dan data hasil opname tetap, qty sumber bukan hasil fisik. Error per baris dan konflik tetap ditampilkan sebagai tabel ringkas; sukses hanya ringkasan jumlah proses/new/update. Pemulihan tetap terpisah melalui halaman standalone dan panel tertutup, tidak memenuhi modal upload.
+
+Berkas: C_Stockopname.php; stockopname_zahir_import.php; stockopname_zahir_import_modal.php; stockopname_master_barang_catalog.php; assets/js/stockopname-zahir-import.js; tests/stockopname_zahir_views_test.php; tests/stockopname_zahir_modal_test.mjs.
+
+Verifikasi: lint PHP; test render view (tanpa preview/metadata, token sesi/CSRF, escaping, standalone); test JS pilihan valid/invalid/kosong/batal, status lama tersembunyi, satu POST import dan double-submit diblokir; suite CSV/QR database uji (validasi/idempotensi/rollback/preservasi bisnis) lulus. Test JS memakai fixture DOM sederhana, bukan UAT browser. UAT upload autentikasi, progres jaringan nyata dan tampilan browser masih diperlukan. Tidak ada mutasi database aplikasi/production untuk pekerjaan ini.

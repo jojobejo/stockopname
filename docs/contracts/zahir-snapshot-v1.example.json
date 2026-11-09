@@ -1,0 +1,16 @@
+{
+  "schema_version": "1",
+  "source_system": "ZahirDigital",
+  "source_instance": "zahir-local",
+  "snapshot_id": "1930f639-8e84-452b-9dd3-20d67f2bf731",
+  "exported_at": "2026-11-01T12:00:00+07:00",
+  "snapshot_type": "full",
+  "scope": "all",
+  "complete": true,
+  "row_count": 3,
+  "rows": [
+    {"kode_barang":"A-SYN","nama_barang":"Contoh * Saja","expired_date":"2028-01-01","qty_lot":"3.500001","p":"2","l":"3","t":"4"},
+    {"kode_barang":"Q-SYN","nama_barang":"Contoh Saja","expired_date":"2028-01-01","qty_lot":"2","p":"2","l":"3","t":"4"},
+    {"kode_barang":"Q-ZERO","nama_barang":"Contoh Nol","expired_date":"2028-02-01","qty_lot":"0","p":"1","l":"1","t":"1"}
+  ]
+}

@@ -17,6 +17,27 @@ class Zahir_lot_catalog
 
     public function rows($refresh = false)
     {
+        $mode = $this->ci->config->item('zahir_catalog_mode');
+        if ($mode === 'imported') {
+            try {
+                if (!function_exists('bcadd')) { throw new RuntimeException('Mode imported memerlukan BCMath.'); }
+                $this->ci->load->model('admin/M_Zahir_snapshot', 'zahir_snapshot');
+                $this->ci->zahir_snapshot->ready();
+                $batch = $this->ci->zahir_snapshot->active();
+                if (!$batch) return ['status'=>true,'data'=>[],'stale'=>false,'cached'=>false,'source'=>['mode'=>'imported','message'=>'Belum ada data. Buka Impor Data Zahir CSV.']];
+                $source = $this->ci->zahir_snapshot->sourceRows($batch['id']);
+                $dimensions = [];
+                foreach ($source as $r) $dimensions[strtoupper(trim($r['kode_barang']))] = $r;
+                $rows = $this->groupRows($source);
+                foreach ($rows as &$r) {
+                    $size = $dimensions[strtoupper(trim($r['kode_barang']))];
+                    foreach (['p','l','t','dimensi','master_id'] as $k) $r[$k] = $size[$k];
+                }
+                unset($r);
+                return ['status'=>true,'data'=>$rows,'stale'=>false,'cached'=>false,'source'=>['mode'=>'imported','snapshot_id'=>$batch['snapshot_id'],'source_instance'=>$batch['source_instance'],'scope'=>$batch['scope'],'exported_at'=>null,'source_file'=>$batch['source_file'],'actor'=>$batch['actor'],'imported_at'=>$batch['imported_at'].' UTC','age_seconds'=>max(0,time()-strtotime($batch['imported_at'].' UTC')),'age_basis'=>'imported_at','compare_local'=>(bool)$this->ci->config->item('zahir_compare_local')]];
+            } catch (Throwable $e) { return ['status'=>false,'message'=>$e->getMessage(),'data'=>[]]; }
+        }
+        if ($mode !== 'direct') return ['status'=>false,'message'=>'Mode sumber Zahir tidak dikenal.'];
         $lots = $this->cachedSource($this->lotCache, $refresh, 'fetchLotRows');
         if (!$lots['status']) {
             return $lots;
@@ -155,6 +176,31 @@ class Zahir_lot_catalog
         usort($rows, function ($a, $b) {
             return [$a['kode_barang'], $a['nama_barang'], $a['expired_date']] <=> [$b['kode_barang'], $b['nama_barang'], $b['expired_date']];
         });
+        return $rows;
+    }
+
+    /** Exact decimal grouping for imported rows, retaining the legacy result shape. */
+    public function groupRows(array $sourceRows)
+    {
+        if (!function_exists('bcadd')) throw new RuntimeException('BCMath wajib untuk snapshot.');
+        $groups=[];
+        foreach ($sourceRows as $r) {
+            $name=trim(preg_replace('/\s+/u',' ',str_replace('*','',$r['nama_barang'])));
+            $key=json_encode([strtoupper($name),$r['expired_date']]);
+            $code=strtoupper(trim($r['kode_barang']));
+            if (!isset($groups[$key])) $groups[$key]=['total'=>'0','codes'=>[]];
+            $groups[$key]['total']=bcadd($groups[$key]['total'],(string)$r['qty_lot'],6);
+            if (!isset($groups[$key]['codes'][$code])) $groups[$key]['codes'][$code]=['kode_barang'=>trim($r['kode_barang']),'nama_barang'=>$name,'expired_date'=>$r['expired_date'],'qty'=>'0'];
+            $groups[$key]['codes'][$code]['qty']=bcadd($groups[$key]['codes'][$code]['qty'],(string)$r['qty_lot'],6);
+        }
+        $rows=[];
+        foreach ($groups as $g) {
+            if (bccomp($g['total'],'0',6)<=0) continue;
+            $selected=null;
+            foreach ($g['codes'] as $c) if (bccomp($c['qty'],'0',6)>0 && ($selected===null || $this->preferCode($c['kode_barang'],$selected['kode_barang']))) $selected=$c;
+            $selected['qty_lot']=$g['total']; unset($selected['qty']); $rows[]=$selected;
+        }
+        usort($rows,function($a,$b){return [$a['kode_barang'],$a['nama_barang'],$a['expired_date']] <=> [$b['kode_barang'],$b['nama_barang'],$b['expired_date']];});
         return $rows;
     }
 

@@ -18,6 +18,7 @@ $qtyZeroCount = (int)($qty_zero_count ?? 0);
     <?php $this->load->view('partial/main/sidebar') ?>
 
     <div class="content-wrapper master-barang-page">
+<?php $this->load->view('content/admin/stockopname_zahir_status'); ?>
         <section class="content-header">
             <div class="container-fluid">
                 <div class="row align-items-center">
@@ -57,7 +58,7 @@ $qtyZeroCount = (int)($qty_zero_count ?? 0);
         </ul></nav>
         <div class="tab-content"><div class="tab-pane fade show active" id="data-master-opname" role="tabpanel" aria-labelledby="tab-master-opname">
         <?php endif; ?>
-        <section class="content"><div class="alert alert-info mx-3">QR barang yang sudah dibuat ditampilkan pada preview sesuai kode barang; expired date dan lot mengikuti baris master opname. <a href="<?= base_url('admin/stockopname/master_opname') ?>#data-master-barang">Buka tab Data Master Barang untuk generate dan cetak QR.</a></div>
+        <section class="content">
             <div class="container-fluid">
                 <style>
                     .master-barang-page{background:#f5f7fb}.mb-panel{background:#fff;border:1px solid #e1e7ef;border-radius:8px;box-shadow:0 8px 22px rgba(16,24,40,.06)}
@@ -120,7 +121,6 @@ $qtyZeroCount = (int)($qty_zero_count ?? 0);
                             <button type="button" class="btn btn-info btn-sm master-upload" data-source="opname_it">Upload Master Opname IT</button>
                             <input type="file" id="masterUploadFile" accept=".csv,text/csv" class="d-none">
                         </div>
-                        <small>CSV: kode_barang, nama_barang, qty, qty_box, qty_pcs, expired_date (YYYY-MM-DD).</small>
                         <div id="masterImportResult" role="status" class="mt-2"></div>
                     </div></div>
                     <div class="col-12 mb-3"><div class="mb-panel p-3">

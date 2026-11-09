@@ -65,6 +65,7 @@ class C_Stockopname extends CI_Controller
                 'status' => (bool)$status,
                 'message' => $message,
                 'data' => $data,
+                'csrf' => isset($this->config) && $this->config->item('csrf_protection') ? ['name'=>$this->security->get_csrf_token_name(),'hash'=>$this->security->get_csrf_hash()] : null,
             ]));
     }
 
@@ -1218,7 +1219,8 @@ class C_Stockopname extends CI_Controller
         }
         foreach ($source['data'] as $item) {
             if (strcasecmp(trim((string)($item['kode_barang'] ?? '')), trim((string)$barang['kode_barang'])) === 0
-                && $this->normalized_zahir_name($item['nama_barang'] ?? '') === $this->normalized_zahir_name($barang['nama_barang'])
+                && (!isset($item['master_id']) || (int)$item['master_id']===(int)$barang['barang_id'])
+                && (!$this->compare_local_zahir() || $this->normalized_zahir_name($item['nama_barang'] ?? '') === $this->normalized_zahir_name($barang['nama_barang']))
                 && trim((string)($item['expired_date'] ?? '')) === $expiredDate) {
                 return ['status' => true, 'item' => $item];
             }
@@ -1229,6 +1231,11 @@ class C_Stockopname extends CI_Controller
     private function normalized_zahir_name($name)
     {
         return trim(preg_replace('/\s+/u', ' ', str_replace('*', '', (string)$name)));
+    }
+
+    private function compare_local_zahir()
+    {
+        return !defined('ENVIRONMENT') || ENVIRONMENT !== 'production';
     }
 
     private function scan_catalog_qrcode($value)
@@ -1357,7 +1364,7 @@ class C_Stockopname extends CI_Controller
         $options = [];
         foreach ($source['data'] as $item) {
             if (strcasecmp(trim((string)$item['kode_barang']), $barang['kode_barang']) === 0
-                && trim((string)$item['nama_barang']) === trim((string)$barang['nama_barang'])) {
+                && (!$this->compare_local_zahir() || trim((string)$item['nama_barang']) === trim((string)$barang['nama_barang']))) {
                 $date = (string)$item['expired_date'];
                 $options[$date] = ['id' => $date, 'expired_date' => $date, 'no_lot' => '-', 'dimensi' => (int)$barang['dimensi']];
             }
@@ -1540,64 +1547,74 @@ class C_Stockopname extends CI_Controller
 
     public function catalog_qrcode($id = 0)
     {
-        $result = $this->create_catalog_qrcode((int)$id, (string)$this->input->get('expired_date', true));
-        if (empty($result['status'])) {
-            if (!empty($result['not_found'])) { show_404(); return; }
-            show_error($result['message'], 500);
-            return;
-        }
-        $this->load->view('content/admin/stockopname_catalog_qrcode', ['barang' => $result['barang'], 'qr_path' => $result['path']]);
+        $date=(string)$this->input->get('expired_date',true);
+        $row=$this->stockopname->catalog_item((int)$id);
+        if(!$row || !$this->valid_date($date)) {show_404();return;}
+        $matched=$this->scan_master_barang_item($row,$date);
+        $saved=$this->stockopname->catalog_qrcode_saved((int)$id,$date);
+        if(empty($matched['status']) || !$saved || !is_file(FCPATH.$saved['qrcode_file'])) {show_error('QR belum tersedia/aktif. Gunakan Generate atau Resign dari katalog.',409);return;}
+        $row['expired_date']=$date;
+        if(!$this->compare_local_zahir()) $row['nama_barang']=$matched['item']['nama_barang'];
+        $this->load->view('content/admin/stockopname_catalog_qrcode',['barang'=>$row,'qr_path'=>$saved['qrcode_file']]);
     }
 
     private function catalog_qrcode_path($id, $expiredDate)
     {
+        $saved=$this->stockopname->catalog_qrcode_saved($id,$expiredDate);
+        if($saved) return $saved['qrcode_file'];
         return 'assets/qrcode/stockopname/MB_' . $id . '_' . str_replace('-', '', $expiredDate) . '.png';
     }
 
     private function catalog_qrcode_for_master_row($row)
     {
         $catalog = $this->stockopname->catalog_item(0, (string)($row['kode_barang'] ?? ''));
-        if (!$catalog || $this->normalized_zahir_name($catalog['nama_barang']) !== $this->normalized_zahir_name($row['nama_barang'] ?? '')
+        if (!$catalog || ($this->compare_local_zahir() && $this->normalized_zahir_name($catalog['nama_barang']) !== $this->normalized_zahir_name($row['nama_barang'] ?? ''))
             || !$this->valid_date((string)($row['expired_date'] ?? ''))) {
             return ['value' => '', 'asset' => $this->asset_payload('')];
         }
+        $active=$this->scan_master_barang_item($catalog,(string)$row['expired_date']);
+        if(empty($active['status'])) return ['value'=>'','asset'=>$this->asset_payload('')];
         $value = 'MB|' . (int)$catalog['barang_id'] . '|' . $row['expired_date'];
         return ['value' => $value, 'asset' => $this->asset_payload($this->catalog_qrcode_path((int)$catalog['barang_id'], $row['expired_date']))];
     }
 
-    private function create_catalog_qrcode($id, $expiredDate)
+    private function create_catalog_qrcode($id, $expiredDate, $reissue = false, $reason = '', $expectedFile = '', $missingOnly = false)
     {
-        if ($id <= 0 || !($row = $this->stockopname->catalog_item($id))) {
-            return ['status' => false, 'not_found' => true, 'message' => 'Barang tidak ditemukan pada master lokal.'];
-        }
-        if (!$this->valid_date($expiredDate)) {
-            return ['status' => false, 'message' => 'Expired date Data Master Barang wajib dipilih.'];
-        }
-        $row['expired_date'] = $expiredDate;
-        $path = $this->catalog_qrcode_path($id, $expiredDate);
-        if (!$this->stockopname->ensure_catalog_qrcode_storage()) { return ['status' => false, 'message' => 'Penyimpanan QR database tidak tersedia.']; }
-        $saved = $this->stockopname->catalog_qrcode_saved($id, $expiredDate);
-        if ($saved) {
-            return is_file(FCPATH . $saved['qrcode_file'])
-                ? ['status' => true, 'barang' => $row, 'path' => $saved['qrcode_file'], 'skipped' => true]
-                : ['status' => false, 'message' => 'QR tersimpan tetapi file tidak ditemukan; periksa file sebelum mencoba lagi.'];
-        }
-        $matched = $this->scan_master_barang_item($row, $expiredDate);
-        if (empty($matched['status'])) { return $matched; }
         try {
-            if (!is_file(FCPATH . $path) && !$this->karisma_code_generator->qrcode('MB|' . $id . '|' . $expiredDate, FCPATH . $path)) {
-                throw new RuntimeException('QRCode gagal dibuat.');
-            }
-            if (!$this->stockopname->save_catalog_qrcode_variant($id, $expiredDate, 'MB|' . $id . '|' . $expiredDate, $path)) {
-                throw new RuntimeException('Penyimpanan QR database gagal.');
-            }
-            $this->stockopname->save_catalog_qrcode($id, $path);
-            return ['status' => true, 'barang' => $row, 'path' => $path];
-        } catch (Throwable $e) {
-            return ['status' => false, 'message' => 'Gagal membuat atau menyimpan QR barang: ' . $e->getMessage()];
-        }
+            $this->load->model('admin/M_Catalog_qr_issue','catalog_qr_issue');
+            return $this->catalog_qr_issue->issue($id,$expiredDate,(string)$this->session->userdata('username'),$reissue,$reason,$expectedFile,
+                function() use($id,$expiredDate) {
+                    $row=$this->stockopname->catalog_item($id);
+                    if(!$row) return ['status'=>false,'message'=>'Master lokal tidak ditemukan.'];
+                    $matched=$this->scan_master_barang_item($row,$expiredDate);
+                    $row['expired_date']=$expiredDate;
+                    return !empty($matched['status'])?['status'=>true,'barang'=>$row]:$matched;
+                },
+                function($value,$path) {
+                    if(!function_exists('imagecreatetruecolor') || !is_file(APPPATH.'libraries/stockopnameqr/qrcode.php')) throw new RuntimeException('Generator QR lokal/GD wajib tersedia.');
+                    return $this->karisma_code_generator->qrcode($value,$path);
+                }, $missingOnly);
+        } catch(Throwable $e) {return ['status'=>false,'message'=>$e->getMessage()];}
     }
 
+    public function ajax_resign_catalog_qrcode()
+    {
+        if(!$this->master_action_allowed()) return $this->json(false,'Request atau token keamanan tidak valid.');
+        $id=(string)$this->input->post('id',true);
+        if(!ctype_digit($id) || (int)$id<=0) return $this->json(false,'ID QR tidak valid.');
+        $result=$this->create_catalog_qrcode((int)$id,(string)$this->input->post('expired_date',true),true,(string)$this->input->post('reason',true),(string)$this->input->post('expected_file',true));
+        return $this->json(!empty($result['status']),$result['message'],!empty($result['status'])?['url'=>base_url($result['path'])]:[]);
+    }
+
+    public function ajax_catalog_qr_history()
+    {
+        $id=(string)$this->input->get('id',true);
+        $date=(string)$this->input->get('expired_date',true);
+        if(!ctype_digit($id) || (int)$id<=0 || !$this->valid_date($date)) return $this->json(false,'Identitas QR tidak valid.');
+        if(!$this->db->table_exists('stockopname_catalog_qr_issue')) return $this->json(false,'Migration riwayat penerbitan QR belum dipasang.');
+        $rows=$this->db->select('operation,actor,reason,issued_at,previous_file,qrcode_file')->where('catalog_id',(int)$id)->where('expired_date',$date)->order_by('id','DESC')->limit(50)->get('stockopname_catalog_qr_issue')->result_array();
+        return $this->json(true,'Riwayat terbaru (waktu UTC).',$rows);
+    }
     public function ajax_generate_all_catalog_qrcode()
     {
         if (!$this->master_action_allowed()) { return $this->json(false, 'Request atau token keamanan tidak valid.'); }
@@ -1619,21 +1636,48 @@ class C_Stockopname extends CI_Controller
                 ]);
                 $local = $this->stockopname->catalog_item(0, $item['kode_barang']);
             }
-            if (!$local || $this->normalized_zahir_name($local['nama_barang']) !== $this->normalized_zahir_name($item['nama_barang'])) {
+            if (!$local || ($this->compare_local_zahir() && $this->normalized_zahir_name($local['nama_barang']) !== $this->normalized_zahir_name($item['nama_barang']))) {
                 $counts['failed']++;
                 $errors[] = $item['kode_barang'] . ': Master Barang lokal tidak cocok atau belum tersedia.';
                 continue;
             }
             $result = $this->create_catalog_qrcode((int)$local['barang_id'], $item['expired_date']);
-            $key = empty($result['status']) ? 'failed' : (!empty($result['skipped']) ? 'skipped' : 'success');
+            $key = !empty($result['skipped']) ? 'skipped' : (empty($result['status']) ? 'failed' : 'success');
             $counts[$key]++;
             if ($key === 'failed') { $errors[] = $item['kode_barang'] . ': ' . $result['message']; }
         }
         $this->json(true, 'Batch selesai.', ['total' => $total, 'next_offset' => min($total, $offset + count($batch)), 'counts' => $counts, 'errors' => array_slice($errors, 0, 10)]);
     }
 
+    public function ajax_reassign_missing_catalog_qrcode()
+    {
+        if (!$this->master_action_allowed()) return $this->json(false,'Request atau token keamanan tidak valid.');
+        $offset=max(0,(int)$this->input->post('offset',true));
+        $this->load->library('Zahir_lot_catalog');
+        $source=$this->zahir_lot_catalog->rows(false);
+        if (empty($source['status']) || !empty($source['stale'])) return $this->json(false,$source['message']??'Referensi katalog belum dapat diverifikasi.');
+        $rows=$source['data'];
+        $fingerprint=hash('sha256',json_encode([$source['source']['mode']??'direct',$source['source']['snapshot_id']??null,$rows]));
+        $expected=(string)$this->input->post('catalog_fingerprint',true);
+        if (($offset>0 || $expected!=='') && !hash_equals($fingerprint,$expected)) return $this->json(false,'Katalog berubah. Jalankan kembali Reassign QR Hilang.');
+        $batch=array_slice($rows,$offset,10);
+        $counts=['success'=>0,'skipped'=>0,'failed'=>0];$errors=[];
+        foreach ($batch as $item) {
+            $local=isset($item['master_id'])?$this->stockopname->catalog_item((int)$item['master_id']):$this->stockopname->catalog_item(0,$item['kode_barang']);
+            if (!$local) {$counts['skipped']++;continue;}
+            $saved=$this->stockopname->catalog_qrcode_saved((int)$local['barang_id'],$item['expired_date']);
+            if ($saved) clearstatcache(true,FCPATH.$saved['qrcode_file']);
+            if (!$saved || is_file(FCPATH.$saved['qrcode_file'])) {$counts['skipped']++;continue;}
+            $result=$this->create_catalog_qrcode((int)$local['barang_id'],$item['expired_date'],true,'Reassign massal: file QR hilang',$saved['qrcode_file'],true);
+            $key=!empty($result['skipped'])?'skipped':(!empty($result['status'])?'success':'failed');$counts[$key]++;
+            if ($key==='failed') $errors[]=$item['kode_barang'].': '.$result['message'];
+        }
+        return $this->json(true,'Batch reassign selesai.',['total'=>count($rows),'next_offset'=>min(count($rows),$offset+count($batch)),'catalog_fingerprint'=>$fingerprint,'counts'=>$counts,'errors'=>$errors]);
+    }
+
     public function ajax_generate_catalog_qrcode()
     {
+        if (!$this->master_action_allowed()) return $this->json(false,'Request atau token keamanan tidak valid.');
         $id = (string)$this->input->post('id', true);
         $kode = trim((string)$this->input->post('kode_barang', true));
         $nama = trim((string)$this->input->post('nama_barang', true));
@@ -1703,6 +1747,88 @@ class C_Stockopname extends CI_Controller
         }
         $message = $createdLocal ? 'Master lokal dan QR Code barang berhasil dibuat.' : 'QR Code barang berhasil digenerate.';
         $this->json(true, $message, ['url' => base_url($result['path'])]);
+    }
+
+    public function zahir_snapshot()
+    {
+        if ($this->input->method(true)==='GET' && $this->input->get('status_only')==='1') {
+            return $this->load->view('content/admin/stockopname_zahir_status');
+        }
+        $this->load->config('zahir_stock_lot');
+        $this->load->model('admin/M_Zahir_snapshot', 'zahir_snapshot');
+        $this->load->library('Zahir_snapshot_validator');
+        $report=null; $message=''; $canCommit=false; $importCompleted=false;
+        $actor=(string)$this->session->userdata('username');
+        $v=[]; $checksum='';
+        try {
+            $this->zahir_snapshot->ready();
+            if ($this->input->method(true)==='POST') {
+                if (!$this->master_action_allowed()) throw new RuntimeException('Token keamanan tidak valid.');
+                if ($this->input->post('operation')==='restore') {
+                    if ($this->input->post('confirm_restore')!=='1') throw new RuntimeException('Konfirmasi pemulihan wajib.');
+                    $this->zahir_snapshot->restorePrevious((string)$this->input->post('expected_snapshot',true),$actor);
+                    $importCompleted=true;
+                    $message='Snapshot sebelumnya dipulihkan. Master baru, QR dan histori tetap disimpan.';
+                } elseif ($this->input->post('operation')==='commit') {
+                    if ($this->input->post('confirm_full')!=='1') throw new RuntimeException('Konfirmasikan bahwa CSV adalah pengganti lengkap cakupan aktif.');
+                    $stage=$this->session->userdata('zahir_snapshot_stage');
+                    if (!$stage || $stage['expires']<time() || !is_file($stage['path'])) throw new RuntimeException('Preview kedaluwarsa. Upload ulang.');
+                    if (empty($stage['preview_token']) || !hash_equals($stage['preview_token'], (string)$this->input->post('preview_token',true))) throw new RuntimeException('Preview berbeda atau telah diganti. Upload dan review ulang.');
+                    $bytes=file_get_contents($stage['path']);
+                    $checksum=hash('sha256',$bytes);
+                    if (!hash_equals($stage['checksum'],$checksum)) throw new RuntimeException('File staging berubah.');
+                    $v=$this->zahir_snapshot_validator->decode($bytes,$stage['extension'],$stage['metadata']);
+                    $report=$this->zahir_snapshot->commitSnapshot($v,$checksum,$stage['fingerprint'],$actor);
+                    $importCompleted=true;
+                    unlink($stage['path']); $this->session->unset_userdata('zahir_snapshot_stage');
+                    $message=$report['idempotent']?'CSV identik sudah aktif; tidak ada penambahan.':'CSV berhasil diaktifkan. Hasil opname dan ukuran master existing tidak diubah.';
+                } else {
+                    $previous=$this->session->userdata('zahir_snapshot_stage');
+                    if($previous && is_file($previous['path'])) unlink($previous['path']);
+                    $this->session->unset_userdata('zahir_snapshot_stage');
+                    $f=$_FILES['snapshot_file']??null;
+                    if (!$f || $f['error']!==UPLOAD_ERR_OK || !is_uploaded_file($f['tmp_name']) || $f['size']>Zahir_snapshot_validator::MAX_BYTES) throw new RuntimeException('Upload gagal atau melebihi 5 MiB.');
+                    $extension=strtolower(pathinfo($f['name'],PATHINFO_EXTENSION));
+                    $metadata=['source_instance'=>$this->config->item('zahir_import_source_instance'),'scope'=>$this->config->item('zahir_import_scope'),'source_file'=>basename($f['name'])];
+                    $bytes=file_get_contents($f['tmp_name']); $checksum=hash('sha256',$bytes);
+                    $v=['document'=>$metadata];
+                    $v=$this->zahir_snapshot_validator->decode($bytes,$extension,$metadata);
+                    $metadata=$v['document']; unset($metadata['rows']);
+                    $report=$this->zahir_snapshot->preview($v,$checksum);
+                    $directImport=$this->input->post('operation')==='import';
+                    $this->zahir_snapshot->audit($v,$checksum,$actor,$directImport?'validated':'dry_run',$report);
+                    $canCommit=!$report['errors'] && !$report['conflicts'];
+                    if ($directImport) {
+                        if ($canCommit) {
+                            $report=$this->zahir_snapshot->commitSnapshot($v,$checksum,$report['fingerprint'],$actor);
+                            $importCompleted=true;
+                            $message=$report['idempotent']?'File ini sudah diimpor. Data tidak digandakan.':'Impor CSV berhasil.';
+                        } else {
+                            $message='Impor dibatalkan. Perbaiki data yang ditandai lalu coba lagi.';
+                        }
+                        $canCommit=false;
+                    } elseif ($canCommit) {
+                        $path=tempnam(sys_get_temp_dir(),'so_zahir_');
+                        if (!$path) throw new RuntimeException('Gagal membuat staging privat.');
+                        $privateDir=strtolower(str_replace('\\','/',realpath(dirname($path))));
+                        foreach ([FCPATH, $_SERVER['DOCUMENT_ROOT'] ?? FCPATH] as $publicRoot) {
+                            $root=strtolower(rtrim(str_replace('\\','/',realpath($publicRoot)), '/'));
+                            if($root!=='' && ($privateDir===$root || strpos($privateDir,$root.'/')===0)) { if($path && is_file($path)) unlink($path); throw new RuntimeException('TEMP wajib berada di luar document root.'); }
+                        }
+                        if (!$path || file_put_contents($path,$bytes,LOCK_EX)!==strlen($bytes)) throw new RuntimeException('Gagal menyimpan staging privat.');
+                        chmod($path,0600);
+                        $this->session->set_userdata('zahir_snapshot_stage',['preview_token'=>bin2hex(random_bytes(32)),'path'=>$path,'expires'=>time()+3600,'checksum'=>$checksum,'extension'=>$extension,'metadata'=>$metadata,'fingerprint'=>$report['fingerprint']]);
+                    }
+                    if (!$directImport) $message=$canCommit?'Dry-run selesai. Periksa seluruh perubahan sebelum konfirmasi.':'Aktivasi ditahan: perbaiki seluruh error/konflik.';
+                }
+            }
+        } catch (Throwable $e) {
+            $message=$e->getMessage();
+            if ($this->db->table_exists('stockopname_zahir_audit')) $this->zahir_snapshot->audit($v,$checksum,$actor,'rejected',['error'=>$message]);
+        }
+        $active=null;
+        try {$active=$this->zahir_snapshot->active();} catch(Throwable $e) {}
+        $this->load->view('content/admin/stockopname_zahir_import',['report'=>$report,'message'=>$message,'canCommit'=>$canCommit,'active'=>$active,'action_token'=>$this->master_action_token(),'preview_token'=>($this->session->userdata('zahir_snapshot_stage')['preview_token']??''),'embedded'=>$this->input->get('embedded')==='1','import_completed'=>$importCompleted]);
     }
 
     public function master_barang_catalog()
@@ -1825,6 +1951,7 @@ class C_Stockopname extends CI_Controller
             'data' => array_slice($rows, $start, $length),
             'stale' => !empty($result['stale']),
             'cached' => !empty($result['cached']),
+            'source' => $result['source'] ?? ['mode'=>'direct'],
             'widgets' => [
                 'total' => $total,
                 'qty_zero' => $this->stockopname->count_all_master_barang('zero'),
@@ -1882,10 +2009,11 @@ class C_Stockopname extends CI_Controller
         foreach ($rows as &$row) {
             $local = $catalog[strtoupper($row['kode_barang'])] ?? null;
             $row['catalog_id'] = $local ? (int)$local['id'] : 0;
-            $path = $local && $this->valid_date($row['expired_date'])
-                ? $this->catalog_qrcode_path((int)$local['id'], $row['expired_date']) : '';
             $saved = $variants[(int)($local['id'] ?? 0) . '|' . $row['expired_date']] ?? null;
-            $nameMatches = $local && $this->normalized_zahir_name($local['nama_barang'] ?? '') === $this->normalized_zahir_name($row['nama_barang']);
+            $path=$saved?$saved['qrcode_file']:'';
+            $row['qrcode_file']=$path;
+            $row['qrcode_recorded']=(bool)$saved;
+            $nameMatches = $local && (!$this->compare_local_zahir() || $this->normalized_zahir_name($local['nama_barang'] ?? '') === $this->normalized_zahir_name($row['nama_barang']));
             $ready = $nameMatches && $saved && $saved['qrcode_file'] === $path && $saved['qrcode_value'] === 'MB|' . (int)$local['id'] . '|' . $row['expired_date'] && is_file(FCPATH . $path);
             $row['qrcode_url'] = $sourceVerified && $ready ? base_url($path) : '';
             $row['qrcode_status'] = !$sourceVerified ? 'unverified' : (!$local ? 'not_in_local'
@@ -2405,7 +2533,11 @@ class C_Stockopname extends CI_Controller
         }
 
         $this->stockopname->reset_stale_qrcode_process(1);
-        $summary = $this->stockopname->qrcode_summary($qtyMode);
+        $this->load->library('Zahir_lot_catalog');
+        $source=$this->zahir_lot_catalog->rows(false);
+        $byCode=[];
+        if(!empty($source['status']) && empty($source['stale'])) foreach($source['data'] as $item) $byCode[strtoupper(trim($item['kode_barang']))][]=$item;
+        $summary = $this->stockopname->qrcode_summary($qtyMode,$byCode);
         $this->raw_json([
             'success' => true,
             'total' => $summary['total'],
@@ -2701,6 +2833,7 @@ class C_Stockopname extends CI_Controller
         $items = [];
         foreach ($rows as $row) {
             $qr = $this->catalog_qrcode_for_master_row($row);
+            if($qr['value']==='') continue;
             $items[] = [
                 'barang' => $row,
                 'qrcode' => $qr['asset'],

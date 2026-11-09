@@ -8,6 +8,7 @@
     <?php $this->load->view('partial/main/sidebar') ?>
 
     <div class="content-wrapper so-input-page">
+<?php $this->load->view('content/admin/stockopname_zahir_status'); ?>
         <section class="content">
             <div class="container-fluid py-3 pb-4">
                 <style>

@@ -43,6 +43,7 @@ $printDate = static function ($value) {
 </head>
 <body>
     <div class="toolbar">
+<?php $this->load->view('content/admin/stockopname_zahir_status'); ?>
         <div><strong>Cetak Kartu Stock</strong><small><?= count($items) ?> kartu · <?= count($sheets) ?> halaman A4 · maksimal 15 kartu per halaman</small></div>
         <button type="button" onclick="window.print()">Cetak</button>
     </div>

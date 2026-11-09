@@ -5,7 +5,7 @@
       <img src="<?= base_url('assets/images/karisma.png') ?>" style="width: 330px; height: 110px;" alt="">
     </div>
     <div class="card-body">
-      <form action="<?= base_url('process') ?>" method="post">
+      <form action="<?= site_url('process') ?>" method="post">
         <div class="input-group mb-3">
           <input type="text" class="form-control" placeholder="Inputkan Username" id="user_isi" name="user_isi">
           <div class="input-group-append">

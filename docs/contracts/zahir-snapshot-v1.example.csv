@@ -1,0 +1,4 @@
+kode_barang,nama_barang,expired_date,qty_lot,p,l,t
+A-SYN,Contoh * Saja,2028-01-01,3.500001,2,3,4
+Q-SYN,Contoh Saja,2028-01-01,2,2,3,4
+Q-ZERO,Contoh Nol,2028-02-01,0,1,1,1

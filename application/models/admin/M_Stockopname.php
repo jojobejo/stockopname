@@ -2830,7 +2830,7 @@ class M_Stockopname extends CI_Model
             return ['status' => false, 'message' => 'Tabel tb_master_barang_all belum tersedia.'];
         }
 
-        $lockName = 'karisma_master_barang_system_code';
+        $lockName = 'stockopname_master_barang_kiubr';
         $lockRow = $this->db->query('SELECT GET_LOCK(?, 10) AS is_locked', [$lockName])->row_array();
         if (empty($lockRow['is_locked'])) {
             return ['status' => false, 'message' => 'Sistem sedang membuat kode barang lain. Silakan coba kembali.'];
@@ -3436,9 +3436,8 @@ class M_Stockopname extends CI_Model
         $variants = $this->catalog_qrcode_variants(array_column($rows, 'catalog_id'));
         foreach ($rows as &$row) {
             $barcode = trim((string)($row['barcode'] ?? ''));
-            $expectedQrcode = 'assets/qrcode/stockopname/MB_' . (int)($row['catalog_id'] ?? 0)
-                . '_' . str_replace('-', '', (string)($row['expired_date'] ?? '')) . '.png';
             $savedQr = $variants[(int)($row['catalog_id'] ?? 0) . '|' . ($row['expired_date'] ?? '')] ?? null;
+            $expectedQrcode = $savedQr ? $savedQr['qrcode_file'] : '';
             $row['qrcode_variant_saved'] = $savedQr ? 1 : 0;
             $row['qrcode_ready'] = $savedQr && $savedQr['qrcode_file'] === $expectedQrcode
                 && $savedQr['qrcode_value'] === 'MB|' . (int)($row['catalog_id'] ?? 0) . '|' . ($row['expired_date'] ?? '')
@@ -3475,7 +3474,8 @@ class M_Stockopname extends CI_Model
         }
         $name = trim((string)($row['nama_barang'] ?? ''));
         $localName = trim((string)($row['catalog_nama_barang'] ?? ''));
-        if ($this->normalized_master_name($name) !== $this->normalized_master_name($localName)) {
+        $compare = !defined('ENVIRONMENT') || ENVIRONMENT !== 'production';
+        if ($compare && $this->normalized_master_name($name) !== $this->normalized_master_name($localName)) {
             return ['status' => 'name_mismatch', 'reason' => 'Kode cocok, tetapi nama berbeda dari Master Barang lokal.'];
         }
         if ($zahirCatalog === null) {
@@ -3488,7 +3488,7 @@ class M_Stockopname extends CI_Model
             return ['status' => 'not_in_zahir', 'reason' => 'Kode barang tidak tersedia pada sumber LOT Zahir dengan qty positif.'];
         }
         foreach ($lots as $lot) {
-            if ($this->normalized_master_name($lot['nama_barang']) === $this->normalized_master_name($name)
+            if ((!$compare || $this->normalized_master_name($lot['nama_barang']) === $this->normalized_master_name($name))
                 && trim((string)$lot['expired_date']) === $expired) {
                 $savedQr = !empty($row['qrcode_variant_saved']);
                 if (empty($row['qrcode_ready'])) {
@@ -3558,11 +3558,13 @@ class M_Stockopname extends CI_Model
 
         $rows = $this->db->get()->result_array();
         $printable = [];
+        $variants=$this->catalog_qrcode_variants(array_column($rows,'catalog_id'));
         foreach ($rows as $row) {
-            $qrcode = 'assets/qrcode/stockopname/MB_' . (int)($row['catalog_id'] ?? 0)
-                . '_' . str_replace('-', '', (string)($row['expired_date'] ?? '')) . '.png';
+            $id=(int)($row['catalog_id']??0);$date=(string)($row['expired_date']??'');
+            $saved=$variants[$id.'|'.$date]??null;
+            $qrcode=$saved && $saved['qrcode_value']==='MB|'.$id.'|'.$date?$saved['qrcode_file']:'';
             if (!empty($row['catalog_id']) && is_file(FCPATH . $qrcode)
-                && trim((string)($row['nama_barang'] ?? '')) === trim((string)($row['catalog_nama_barang'] ?? ''))) {
+                && (ENVIRONMENT==='production' || trim((string)($row['nama_barang'] ?? '')) === trim((string)($row['catalog_nama_barang'] ?? '')))) {
                 $row['qrcode'] = $qrcode;
                 $printable[] = $row;
             }
@@ -3700,6 +3702,7 @@ class M_Stockopname extends CI_Model
             return [];
         }
         $catalog = [];
+        $firstId = [];
         foreach (array_chunk(array_values(array_unique($codes)), 500) as $batch) {
             $rows = $this->db->select('id, kd_barang, nama_barang, qrcode')
                 ->from($this->masterBarangAllTable)
@@ -3708,8 +3711,12 @@ class M_Stockopname extends CI_Model
                 ->get()->result_array();
             foreach ($rows as $row) {
                 $code = strtoupper(trim((string)$row['kd_barang']));
-                if (!isset($catalog[$code])) {
+                if (!isset($firstId[$code])) {
+                    $firstId[$code]=(int)$row['id'];
                     $catalog[$code] = $row;
+                } elseif ($firstId[$code] !== (int)$row['id']) {
+                    // Conflicting identities must be reconciled, never pick MIN(id).
+                    $catalog[$code] = null;
                 }
             }
         }
@@ -3731,6 +3738,12 @@ class M_Stockopname extends CI_Model
     {
         if (!$this->db->table_exists('stockopname_catalog_qrcode')) { return null; }
         return $this->db->where('catalog_id', (int)$id)->where('expired_date', $expiredDate)->get('stockopname_catalog_qrcode')->row_array();
+    }
+
+    public function catalog_qrcode_asset_path($id, $expiredDate)
+    {
+        $saved=$this->catalog_qrcode_saved($id,$expiredDate);
+        return $saved && $saved['qrcode_value']==='MB|'.(int)$id.'|'.$expiredDate ? $saved['qrcode_file'] : '';
     }
 
     public function save_catalog_qrcode_variant($id, $expiredDate, $value, $path)
@@ -4594,7 +4607,7 @@ class M_Stockopname extends CI_Model
             ->update($this->masterTable, $allowed);
     }
 
-    public function qrcode_summary($qtyMode = 'positive')
+    public function qrcode_summary($qtyMode = 'positive', $sourceCatalog = null)
     {
         if (!$this->db->table_exists($this->masterTable)) {
             return [
@@ -4609,11 +4622,16 @@ class M_Stockopname extends CI_Model
         $this->master_barang_qty_filter($qtyMode);
         $rows = $this->db->get()->result_array();
         $done = 0;
+        $variants=$this->catalog_qrcode_variants(array_column($rows,'catalog_id'));
         foreach ($rows as $row) {
-            $path = 'assets/qrcode/stockopname/MB_' . (int)($row['catalog_id'] ?? 0)
-                . '_' . str_replace('-', '', (string)($row['expired_date'] ?? '')) . '.png';
+            $id=(int)($row['catalog_id']??0);$date=(string)($row['expired_date']??'');
+            $saved=$variants[$id.'|'.$date]??null;
+            $path=$saved && $saved['qrcode_value']==='MB|'.$id.'|'.$date?$saved['qrcode_file']:'';
+            $row['qrcode_ready']=$path!=='' && is_file(FCPATH.$path);
+            $row['qrcode_variant_saved']=$path!=='';
+            if($sourceCatalog!==null && $this->master_barang_sync_status($row,$sourceCatalog)['status']!=='generated') continue;
             if (!empty($row['catalog_id']) && is_file(FCPATH . $path)
-                && trim((string)$row['nama_barang']) === trim((string)$row['catalog_nama_barang'])) {
+                && (ENVIRONMENT==='production' || trim((string)$row['nama_barang']) === trim((string)$row['catalog_nama_barang']))) {
                 $done++;
             }
         }

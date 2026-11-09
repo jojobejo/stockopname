@@ -25,7 +25,13 @@ defined('BASEPATH') OR exit('No direct script access allowed');
 */
 $base_protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
 $base_host = isset($_SERVER['HTTP_HOST']) ? $_SERVER['HTTP_HOST'] : 'localhost';
-$config['base_url'] = $base_protocol . '://' . $base_host . '/stockopname/';
+// APP_BASE_URL can pin the public URL when deployed behind a reverse proxy.
+$base_url_override = getenv('APP_BASE_URL');
+$base_script = str_replace('\\', '/', $_SERVER['SCRIPT_NAME'] ?? '/index.php');
+$base_path = rtrim(str_replace('\\', '/', dirname($base_script)), '/.');
+$config['base_url'] = $base_url_override !== false && trim($base_url_override) !== ''
+    ? rtrim(trim($base_url_override), '/') . '/'
+    : $base_protocol . '://' . $base_host . $base_path . '/';
 
 /*
 |--------------------------------------------------------------------------

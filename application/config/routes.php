@@ -51,7 +51,7 @@ defined('BASEPATH') or exit('No direct script access allowed');
 */
 
 // Sistem Routes
-$route['default_controller'] = 'auth';
+$route['default_controller'] = 'Auth';
 $route['404_override'] = '';
 $route['translate_uri_dashes'] = FALSE;
 
@@ -592,3 +592,14 @@ $route['hrd/penilaian_lingkungan/ratings/save']    = 'hrd/C_Hrd/save_hrd_rating'
 $route['hrd/penilaian_lingkungan/ratings/delete']  = 'hrd/C_Hrd/delete_hrd_rating';
 
 $route['admin/stockopname/master_barang/qrcode/(:num)'] = 'admin/C_Stockopname/catalog_qrcode/$1';
+
+// Impor snapshot referensi Zahir; terpisah dari impor master lokal/opname.
+$route['admin/stockopname/zahir-snapshot'] = 'admin/C_Stockopname/zahir_snapshot';
+
+$route['admin/stockopname/zahir-csv'] = 'admin/C_Stockopname/zahir_snapshot';
+
+$route['admin/stockopname/master_barang/resign-qrcode'] = 'admin/C_Stockopname/ajax_resign_catalog_qrcode';
+
+$route['admin/stockopname/master_barang/qr-history'] = 'admin/C_Stockopname/ajax_catalog_qr_history';
+
+$route['admin/stockopname/master_barang/reassign-missing-qrcode'] = 'admin/C_Stockopname/ajax_reassign_missing_catalog_qrcode';

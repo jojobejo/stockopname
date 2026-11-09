@@ -6,6 +6,7 @@
     <?php $this->load->view('partial/main/navbar') ?>
     <?php $this->load->view('partial/main/sidebar') ?>
     <div class="content-wrapper">
+<div id="catalogZahirSourceStatus"><?php $this->load->view('content/admin/stockopname_zahir_status'); ?></div>
         <section class="content-header"><div class="container-fluid d-flex align-items-center justify-content-between">
             <h1 class="m-0"><?= html_escape($page_heading ?? 'Master Barang') ?></h1>
             <a href="<?= base_url('admin/stockopname/master_opname') ?>" class="btn btn-outline-secondary btn-sm"><i class="fas fa-arrow-left"></i> Master Opname</a>
@@ -15,6 +16,7 @@
         <section class="content pt-3"><div class="container-fluid">
 <?php endif; ?>
             <div class="row catalog-stats">
+                <div class="col-12 col-md-6 col-xl-3 mb-3"><button type="button" class="catalog-stat" data-toggle="modal" data-target="#zahirCsvImportModal"><span>Referensi Zahir</span><strong style="font-size:20px"><i class="fas fa-file-upload mr-2" aria-hidden="true"></i>Impor CSV</strong><small>Pilih file dan langsung impor</small></button></div>
                 <div class="col-12 col-md-6 col-xl-3 mb-3"><button type="button" class="catalog-stat" data-status=""><span>Total Data</span><strong id="catalogTotal">0</strong><small>Kelompok nama dan expired date</small></button></div>
                 <div class="col-12 col-md-6 col-xl-3 mb-3"><a class="catalog-stat" href="<?= base_url('admin/stockopname/master_opname/qty-zero') ?>"><span>Total Barang Qty 0</span><strong id="catalogQtyZero">0</strong><small>Master opname lokal · lihat data qty 0</small></a></div>
                 <div class="col-12 col-md-6 col-xl-3 mb-3"><button type="button" class="catalog-stat" data-status="generated"><span>QR Code Selesai</span><strong id="catalogQrDone">0</strong><small>Jumlah barang siap · filter selesai</small></button></div>
@@ -24,13 +26,13 @@
             <div class="row"><div class="col-lg-8 mb-3"><div class="card h-100">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <span>Data barang dan expired date dari ZahirDigital</span>
-                <div><small id="catalogSyncStatus" class="text-muted mr-2"></small><button type="button" class="btn btn-outline-primary btn-sm" id="refreshMasterBarang"><i class="fas fa-sync-alt"></i> Refresh</button></div>
+                <div><small id="catalogSyncStatus" class="text-muted mr-2"></small><button type="button" class="btn btn-primary btn-sm mr-1" data-toggle="modal" data-target="#zahirCsvImportModal"><i class="fas fa-upload" aria-hidden="true"></i> Impor CSV</button><button type="button" class="btn btn-outline-primary btn-sm" id="refreshMasterBarang"><i class="fas fa-sync-alt"></i> Refresh</button></div>
             </div>
             <div class="card-body">
                 <div id="masterBarangError" class="alert alert-danger" role="alert" style="display:none"></div>
-                <p class="text-muted">Hanya barang dengan total Qty Lot lebih dari 0. Tanda * pada nama dihapus. Satu baris untuk setiap nama barang dan expired date; bila terdapat beberapa kode, kode berawalan Q diprioritaskan untuk dimensi dan QR.</p>
                 <div class="form-group d-flex align-items-center flex-wrap" style="gap:8px">
                     <button type="button" class="btn btn-primary btn-sm" id="generateAllCatalogQr">Generate All QR Code</button>
+                    <button type="button" class="btn btn-outline-warning btn-sm" id="reassignMissingCatalogQr"><i class="fas fa-redo mr-1" aria-hidden="true"></i>Reassign All QR Hilang</button>
                     <span id="generateAllProgress" role="status" class="small text-muted"></span>
                     <label for="filterQrStatus" class="mb-0">Status QR</label>
                     <select id="filterQrStatus" class="form-control form-control-sm" style="max-width:210px">
@@ -57,6 +59,7 @@
 <?php else: ?>
         </div></section>
 <?php endif; ?>
+<?php $this->load->view('content/admin/stockopname_zahir_import_modal'); ?>
 <style>
     .catalog-stat{width:100%;min-height:112px;display:flex;flex-direction:column;align-items:flex-start;text-align:left;padding:16px;border:1px solid #dfe5ec;border-left:4px solid #0f766e;border-radius:8px;background:#fff;color:#172033;text-decoration:none;cursor:pointer}
     .catalog-stat:hover,.catalog-stat.active{border-color:#0f766e;color:#172033;text-decoration:none;box-shadow:0 0 0 3px rgba(15,118,110,.12)}
@@ -81,24 +84,64 @@ window.addEventListener('load', function () {
     var listUrl = '<?= base_url('admin/stockopname/master_barang/list') ?>';
     var printUrl = '<?= base_url('admin/stockopname/master_barang/print-kartu-stock') ?>';
     var actionToken = '<?= html_escape($master_action_token ?? '') ?>';
-    $('#generateAllCatalogQr').on('click', function () {
-        var button = $(this), offset = 0, counts = {success: 0, skipped: 0, failed: 0}, errors = [];
-        button.prop('disabled', true);
+    var qrCsrf = <?= json_encode($this->config->item('csrf_protection') ? ['name'=>$this->security->get_csrf_token_name(),'hash'=>$this->security->get_csrf_hash()] : null) ?>;
+    window.StockopnameZahirImport.init({
+        url: <?= json_encode(site_url('admin/stockopname/zahir-csv') . '?embedded=1') ?>,
+        onResponse: function (panel) {
+            var name = panel.attr('data-csrf-name');
+            if (name) { qrCsrf = {name: name, hash: panel.attr('data-csrf-hash')}; }
+        },
+        onCommitted: function () {
+            selectedCards = {};
+            table.ajax.reload(null, false);
+            $.get(<?= json_encode(site_url('admin/stockopname/zahir-csv') . '?status_only=1') ?>, function (html) {
+                var fresh = $('<div>').append($.parseHTML(html, document, false)).find('.zahir-source-status').first();
+                if (fresh.length) { $('.zahir-source-status').each(function () { $(this).replaceWith(fresh.clone()); }); }
+                else if ($.trim(html) === '') { $('.zahir-source-status').remove(); }
+            });
+        }
+    });
+    function secureQrData(data) { if (qrCsrf) { data[qrCsrf.name] = qrCsrf.hash; } return data; }
+    var catalogBatchBusy = false;
+    function runCatalogQrBatch(url, repair) {
+        if (catalogBatchBusy) { return; }
+        if (repair && !window.confirm('Pulihkan semua file QR yang hilang pada katalog aktif? QR yang masih tersedia akan dilewati.')) { return; }
+        var offset = 0, fingerprint = '', counts = {success: 0, skipped: 0, failed: 0}, errors = [];
+        catalogBatchBusy = true;
+        $('#generateAllCatalogQr,#reassignMissingCatalogQr').prop('disabled', true);
+        function finish() {
+            catalogBatchBusy = false;
+            $('#generateAllCatalogQr,#reassignMissingCatalogQr').prop('disabled', false);
+            selectedCards = {};
+            table.ajax.reload(null, false);
+        }
         function next() {
-            $.post('<?= base_url('admin/stockopname/master_barang/generate-all-qrcode') ?>', {offset: offset, action_token: actionToken}, null, 'json')
+            $.post(url, secureQrData({offset: offset, action_token: actionToken, catalog_fingerprint: fingerprint}), null, 'json')
                 .done(function (res) {
-                    if (!res.status) { alertMessage('error', res.message); button.prop('disabled', false); return; }
-                    var data = res.data || {};
+                    if (res.csrf) { qrCsrf = res.csrf; }
+                    if (!res.status) { finish(); alertMessage('error', res.message); return; }
+                    var data = res.data || {}, nextOffset = Number(data.next_offset || 0), total = Number(data.total || 0);
+                    if (total > offset && nextOffset <= offset) { finish(); alertMessage('error', 'Proses tidak maju. Muat ulang katalog lalu coba kembali.'); return; }
                     Object.keys(counts).forEach(function (key) { counts[key] += Number((data.counts || {})[key] || 0); });
                     errors = errors.concat(data.errors || []);
-                    offset = Number(data.next_offset || 0);
-                    $('#generateAllProgress').text(offset + ' / ' + data.total + ' · Berhasil: ' + counts.success + ' · Dilewati: ' + counts.skipped + ' · Gagal: ' + counts.failed);
-                    if (offset < Number(data.total || 0)) { window.setTimeout(next, 0); }
-                    else { button.prop('disabled', false); table.ajax.reload(null, false); if (errors.length) { showGenerateErrors(errors, counts); } }
-                }).fail(function () { button.prop('disabled', false); alertMessage('error', 'Batch terputus. Jalankan kembali; QR tersimpan akan dilewati.'); });
+                    fingerprint = data.catalog_fingerprint || fingerprint;
+                    offset = nextOffset;
+                    $('#generateAllProgress').text((repair ? 'Reassign: ' : '') + offset + ' / ' + total + ' | ' + (repair ? 'Dipulihkan: ' : 'Berhasil: ') + counts.success + ' | Dilewati: ' + counts.skipped + ' | Gagal: ' + counts.failed);
+                    if (offset < total) { window.setTimeout(next, 0); }
+                    else {
+                        finish();
+                        if (errors.length) { showGenerateErrors(errors, counts); }
+                        else if (repair) { alertMessage('success', counts.success + ' file QR dipulihkan.'); }
+                    }
+                }).fail(function () {
+                    finish();
+                    alertMessage('error', 'Proses terputus. Jalankan kembali; QR yang sudah tersedia akan dilewati.');
+                });
         }
         next();
-    });
+    }
+    $('#generateAllCatalogQr').on('click', function () { runCatalogQrBatch('<?= base_url('admin/stockopname/master_barang/generate-all-qrcode') ?>', false); });
+    $('#reassignMissingCatalogQr').on('click', function () { runCatalogQrBatch('<?= base_url('admin/stockopname/master_barang/reassign-missing-qrcode') ?>', true); });
     function alertMessage(icon, message) {
         if (typeof Swal !== 'undefined') { Swal.fire({icon: icon, text: message}); }
         else { window.alert(message); }
@@ -198,7 +241,7 @@ window.addEventListener('load', function () {
                     $('#catalogSyncStatus').text('Cache lama; Zahir belum terverifikasi');
                     $('#masterBarangError').text('Sumber Zahir belum terverifikasi. Klik Refresh untuk mengambil data terbaru.').show();
                 } else {
-                    $('#catalogSyncStatus').text(response.cached ? 'Data cache Zahir; belum diverifikasi saat ini' : 'Data Zahir terverifikasi');
+                    $('#catalogSyncStatus').text(response.source && response.source.mode === 'imported' ? '' : (response.cached ? 'Data cache Zahir; belum diverifikasi saat ini' : 'Data Zahir terverifikasi'));
                 }
                 return response.data || [];
             },
@@ -235,7 +278,11 @@ window.addEventListener('load', function () {
             {data: null, render: function (value, type, row) {
                 if (type !== 'display') { return row.qrcode_status; }
                 return row.variants.map(function (variant) {
-                    if (variant.qrcode_url) { return '<div class="text-muted small">' + esc(variant.kode_barang) + ': siap</div>'; }
+                    if (variant.qrcode_recorded && variant.qrcode_status !== 'name_mismatch' && variant.qrcode_status !== 'unverified') {
+                        return '<button type="button" class="btn btn-secondary btn-xs m-1" disabled>Sudah digenerate</button>' +
+                            '<button type="button" class="btn btn-outline-warning btn-xs resign-catalog-qr m-1" data-id="' + esc(variant.catalog_id) + '" data-expired="' + esc(variant.expired_date) + '" data-file="' + esc(variant.qrcode_file) + '">Resign QR</button>' +
+                            '<button type="button" class="btn btn-outline-info btn-xs qr-history m-1" data-id="' + esc(variant.catalog_id) + '" data-expired="' + esc(variant.expired_date) + '">Riwayat</button>';
+                    }
                     if (variant.qrcode_status === 'not_in_local' || variant.qrcode_status === 'name_mismatch' || variant.qrcode_status === 'unverified') { return '<div class="text-muted small">' + esc(variant.kode_barang) + ': verifikasi data dahulu</div>'; }
                     return '<button type="button" class="btn btn-outline-primary btn-xs generate-catalog-qr m-1" data-id="' + esc(variant.catalog_id || '') + '" data-code="' + esc(variant.kode_barang) + '" data-name="' + esc(variant.nama_barang) + '" data-expired="' + esc(variant.expired_date) + '">Generate ' + esc(variant.kode_barang) + '</button>';
                 }).join('');
@@ -314,15 +361,44 @@ window.addEventListener('load', function () {
     $('#tableMasterBarangZahir tbody').on('click', '.generate-catalog-qr', function () {
         var button = $(this), id = button.attr('data-id'), code = button.attr('data-code');
         button.prop('disabled', true).text('Memproses...');
-        $.ajax({url: '<?= base_url('admin/stockopname/master_barang/generate-qrcode') ?>', type: 'POST', dataType: 'json', data: {
-            id: id, kode_barang: code, nama_barang: button.attr('data-name'), expired_date: button.attr('data-expired')
-        }})
+        $.ajax({url: '<?= base_url('admin/stockopname/master_barang/generate-qrcode') ?>', type: 'POST', dataType: 'json', data: secureQrData({
+            action_token: actionToken, id: id, kode_barang: code, nama_barang: button.attr('data-name'), expired_date: button.attr('data-expired')
+        })})
             .done(function (response) {
+                if (response.csrf) { qrCsrf = response.csrf; }
                 alertMessage(response.status ? 'success' : 'error', response.message || 'Gagal generate QR Code.');
                 if (response.status) { table.ajax.reload(null, false); }
             })
             .fail(function (xhr) { alertMessage('error', (xhr.responseJSON && xhr.responseJSON.message) || 'Server gagal generate QR Code.'); })
             .always(function () { button.prop('disabled', false).text('Generate QR'); });
+    });
+    $('#tableMasterBarangZahir tbody').on('click', '.qr-history', function () {
+        var button = $(this);
+        $.getJSON('<?= base_url('admin/stockopname/master_barang/qr-history') ?>', {id: button.attr('data-id'), expired_date: button.attr('data-expired')})
+            .done(function (response) {
+                if (!response.status) { alertMessage('error', response.message); return; }
+                var text = (response.data || []).map(function (item) {
+                    return item.issued_at + ' UTC | ' + item.operation + ' | ' + item.actor + '\n' + item.reason + '\nAset: ' + item.qrcode_file;
+                }).join('\n\n');
+                alertMessage('info', text || 'QR legacy: belum ada riwayat penerbitan melalui fitur baru.');
+            }).fail(function () { alertMessage('error', 'Riwayat QR gagal dimuat.'); });
+    });
+    $('#tableMasterBarangZahir tbody').on('click', '.resign-catalog-qr', function () {
+        var button = $(this);
+        var reason = window.prompt('Alasan Resign QR (5-500 karakter). Aset diterbitkan ulang; payload/label lama tetap sah selama referensi aktif.');
+        if (reason === null) { return; }
+        reason = reason.trim();
+        if (reason.length < 5 || reason.length > 500) { alertMessage('error', 'Alasan wajib 5-500 karakter.'); return; }
+        if (!window.confirm('Terbitkan ulang QR barang dan expired ini? Tindakan akan dicatat.')) { return; }
+        button.prop('disabled', true);
+        $.post('<?= base_url('admin/stockopname/master_barang/resign-qrcode') ?>', secureQrData({
+            action_token: actionToken, id: button.attr('data-id'), expired_date: button.attr('data-expired'), expected_file: button.attr('data-file'), reason: reason
+        }), null, 'json').done(function (response) {
+            if (response.csrf) { qrCsrf = response.csrf; }
+            alertMessage(response.status ? 'success' : 'error', response.message);
+            if (response.status) { selectedCards = {}; table.ajax.reload(null, false); }
+        }).fail(function () { alertMessage('error', 'Resign QR gagal. Muat ulang status sebelum mencoba kembali.'); })
+            .always(function () { button.prop('disabled', false); });
     });
     $('#printStockCard').on('click', function () { if (selectedVariant && selectedVariant.qrcode_url) { submitPrint('selected', [cardValues(selectedVariant)]); } });
     $('#printStockCardWidget,#printSelectedCards').on('click', function () {
@@ -340,8 +416,8 @@ window.addEventListener('load', function () {
             refreshBusy = false;
             $('#refreshMasterBarang').prop('disabled', false);
             if (response && !response.stale && !response.cached) {
-                $('#catalogSyncStatus').text('Data Zahir terbaru siap');
-                if (showAlert) { alertMessage('success', 'Data ZahirDigital berhasil diperbarui.'); }
+                $('#catalogSyncStatus').text(response.source && response.source.mode === 'imported' ? '' : 'Data Zahir terbaru siap');
+                if (showAlert && !(response.source && response.source.mode === 'imported')) { alertMessage('success', 'Data ZahirDigital berhasil diperbarui.'); }
             } else {
                 $('#catalogSyncStatus').text('Pembaruan Zahir gagal');
                 if (showAlert) { alertMessage('error', (response && response.error) || 'Sumber Zahir belum terverifikasi. Coba Refresh kembali.'); }

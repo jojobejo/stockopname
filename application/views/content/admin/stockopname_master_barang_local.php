@@ -11,6 +11,8 @@
 
         <!-- Content Wrapper. Contains page content -->
         <div class="content-wrapper">
+<?php $this->load->view('content/admin/stockopname_zahir_status'); ?>
+<p class="p-3"><a href="<?= site_url('admin/stockopname/zahir-csv') ?>">Impor Data Zahir CSV</a></p>
             <!-- Content Header (Page header) -->
             <div class="content-header">
                 <div class="container-fluid">
