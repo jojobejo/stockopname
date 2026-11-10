@@ -2949,4 +2949,220 @@ class C_Stockopname extends CI_Controller
 
         $this->load->view('content/admin/stockopname_print_preview_asset.php', $data);
     }
+
+    public function ajax_delete_catalog_qrcode()
+    {
+        if (!$this->is_superadmin()) {
+            return $this->json(false, 'Hanya Superadmin yang memiliki hak akses menghapus QR Code.');
+        }
+        if (!$this->master_action_allowed()) {
+            return $this->json(false, 'Request atau token keamanan tidak valid.');
+        }
+        $id = (int)$this->input->post('id', true);
+        $expiredDate = trim((string)$this->input->post('expired_date', true));
+        if ($id <= 0 || !$this->valid_date($expiredDate)) {
+            return $this->json(false, 'Data barang atau tanggal kadaluarsa tidak valid.');
+        }
+
+        $result = $this->stockopname->delete_catalog_qrcode($id, $expiredDate, (string)$this->session->userdata('username'));
+        return $this->json(!empty($result['status']), $result['message'] ?? 'QR Code berhasil dihapus.', $result);
+    }
+
+    public function ajax_regenerate_catalog_qrcode()
+    {
+        if (!$this->is_superadmin()) {
+            return $this->json(false, 'Hanya Superadmin yang memiliki hak akses generate ulang QR Code.');
+        }
+        if (!$this->master_action_allowed()) {
+            return $this->json(false, 'Request atau token keamanan tidak valid.');
+        }
+        $id = (int)$this->input->post('id', true);
+        $expiredDate = trim((string)$this->input->post('expired_date', true));
+        if ($id <= 0 || !$this->valid_date($expiredDate)) {
+            return $this->json(false, 'Data barang atau tanggal kadaluarsa tidak valid.');
+        }
+
+        $this->stockopname->delete_catalog_qrcode($id, $expiredDate, (string)$this->session->userdata('username'));
+        $result = $this->create_catalog_qrcode($id, $expiredDate, false);
+        return $this->json(!empty($result['status']), !empty($result['status']) ? 'QR Code berhasil digenerate ulang.' : ($result['message'] ?? 'Gagal generate ulang QR Code.'), !empty($result['status']) ? ['url' => base_url($result['path'])] : []);
+    }
+
+    public function ajax_regenerate_all_catalog_qrcode()
+    {
+        if (!$this->is_superadmin()) {
+            return $this->json(false, 'Hanya Superadmin yang memiliki hak akses generate ulang batch.');
+        }
+        if (!$this->master_action_allowed()) {
+            return $this->json(false, 'Request atau token keamanan tidak valid.');
+        }
+
+        $offset = max(0, (int)$this->input->post('offset', true));
+        $this->load->library('Zahir_lot_catalog');
+        $source = $this->zahir_lot_catalog->rows(false);
+        if (empty($source['status'])) {
+            return $this->json(false, $source['message'] ?? 'Data Zahir tidak tersedia.');
+        }
+
+        $rows = $source['data'];
+        $total = count($rows);
+        $batchSize = 100;
+        $batch = array_slice($rows, $offset, $batchSize);
+        $actualBatchCount = count($batch);
+        $counts = ['success' => 0, 'skipped' => 0, 'failed' => 0];
+        $errors = [];
+        $actor = (string)$this->session->userdata('username');
+
+        foreach ($batch as $item) {
+            $local = $this->stockopname->catalog_item(0, $item['kode_barang']);
+            if (!$local && !empty($item['p']) && !empty($item['l']) && !empty($item['t'])) {
+                $this->stockopname->create_master_barang_catalog([
+                    'kd_barang' => $item['kode_barang'],
+                    'nama_barang' => $item['nama_barang'],
+                    'p' => (int)$item['p'],
+                    'l' => (int)$item['l'],
+                    't' => (int)$item['t'],
+                ]);
+                $local = $this->stockopname->catalog_item(0, $item['kode_barang']);
+            }
+
+            if (!$local || ($this->compare_local_zahir() && $this->normalized_zahir_name($local['nama_barang']) !== $this->normalized_zahir_name($item['nama_barang']))) {
+                $counts['failed']++;
+                $errors[] = $item['kode_barang'] . ': Master Barang lokal tidak cocok atau belum tersedia.';
+                continue;
+            }
+
+            $this->stockopname->delete_catalog_qrcode((int)$local['barang_id'], $item['expired_date'], $actor);
+            $result = $this->create_catalog_qrcode((int)$local['barang_id'], $item['expired_date'], false);
+            $key = !empty($result['status']) ? 'success' : 'failed';
+            $counts[$key]++;
+            if ($key === 'failed') {
+                $errors[] = $item['kode_barang'] . ': ' . ($result['message'] ?? 'Gagal membuat QR.');
+            }
+        }
+
+        $nextOffset = min($total, $offset + $actualBatchCount);
+        return $this->json(true, 'Batch generate ulang selesai.', [
+            'total'             => $total,
+            'offset'            => $offset,
+            'batch_size'        => $actualBatchCount,
+            'next_offset'       => $nextOffset,
+            'counts'            => $counts,
+            'errors'            => array_slice($errors, 0, 10),
+            'is_last_batch'     => ($nextOffset >= $total)
+        ]);
+    }
+
+    public function ajax_print_queue_list()
+    {
+        $this->load->model('admin/M_Stockopname_print_queue', 'print_queue');
+        $username = (string)$this->session->userdata('username');
+        $rows = $this->print_queue->get_queue($username);
+
+        foreach ($rows as &$item) {
+            $local = $this->stockopname->catalog_item(0, $item['kode_barang']);
+            $saved = $local ? $this->stockopname->catalog_qrcode_saved((int)$local['barang_id'], $item['expired_date']) : null;
+            $item['qrcode_url'] = ($saved && is_file(FCPATH . $saved['qrcode_file'])) ? base_url($saved['qrcode_file']) : '';
+            $item['qrcode_ready'] = !empty($item['qrcode_url']);
+        }
+        unset($item);
+
+        return $this->json(true, 'Data antrian cetak berhasil dimuat.', $rows);
+    }
+
+    public function ajax_print_queue_add()
+    {
+        if (!$this->master_action_allowed()) {
+            return $this->json(false, 'Request atau token keamanan tidak valid.');
+        }
+
+        $this->load->model('admin/M_Stockopname_print_queue', 'print_queue');
+        $username = (string)$this->session->userdata('username');
+        if ($username === '') {
+            return $this->json(false, 'Sesi pengguna tidak valid.');
+        }
+
+        $rawItems = $this->input->post('items', true);
+        $items = [];
+        if (is_string($rawItems)) {
+            $decoded = json_decode($rawItems, true);
+            if (is_array($decoded)) {
+                $items = $decoded;
+            }
+        } elseif (is_array($rawItems)) {
+            $items = $rawItems;
+        }
+
+        if (empty($items)) {
+            $singleCode = trim((string)$this->input->post('kode_barang', true));
+            if ($singleCode !== '') {
+                $items[] = [
+                    'kode_barang'  => $singleCode,
+                    'nama_barang'  => trim((string)$this->input->post('nama_barang', true)),
+                    'expired_date' => trim((string)$this->input->post('expired_date', true)),
+                    'copies'       => max(1, (int)$this->input->post('copies', true)),
+                ];
+            }
+        }
+
+        if (empty($items)) {
+            return $this->json(false, 'Tidak ada barang yang dipilih untuk dimasukkan antrian.');
+        }
+
+        $addedCount = 0;
+        foreach ($items as $item) {
+            $code = trim((string)($item['kode_barang'] ?? ''));
+            $name = trim((string)($item['nama_barang'] ?? ''));
+            $exp = trim((string)($item['expired_date'] ?? ''));
+            $copies = max(1, (int)($item['copies'] ?? 1));
+
+            if ($code !== '') {
+                $this->print_queue->add_item($username, $code, $name, $exp, $copies);
+                $addedCount++;
+            }
+        }
+
+        return $this->json(true, $addedCount . ' barang berhasil dimasukkan ke antrian cetak.');
+    }
+
+    public function ajax_print_queue_update_copies()
+    {
+        if (!$this->master_action_allowed()) {
+            return $this->json(false, 'Request atau token keamanan tidak valid.');
+        }
+
+        $this->load->model('admin/M_Stockopname_print_queue', 'print_queue');
+        $username = (string)$this->session->userdata('username');
+        $id = (int)$this->input->post('id', true);
+        $copies = max(1, (int)$this->input->post('copies', true));
+
+        $ok = $this->print_queue->update_copies($username, $id, $copies);
+        return $this->json($ok, $ok ? 'Jumlah salinan berhasil diperbarui.' : 'Gagal memperbarui jumlah salinan.');
+    }
+
+    public function ajax_print_queue_remove()
+    {
+        if (!$this->master_action_allowed()) {
+            return $this->json(false, 'Request atau token keamanan tidak valid.');
+        }
+
+        $this->load->model('admin/M_Stockopname_print_queue', 'print_queue');
+        $username = (string)$this->session->userdata('username');
+        $id = (int)$this->input->post('id', true);
+
+        $ok = $this->print_queue->remove_item($username, $id);
+        return $this->json($ok, $ok ? 'Barang berhasil dihapus dari antrian.' : 'Gagal menghapus barang dari antrian.');
+    }
+
+    public function ajax_print_queue_clear()
+    {
+        if (!$this->master_action_allowed()) {
+            return $this->json(false, 'Request atau token keamanan tidak valid.');
+        }
+
+        $this->load->model('admin/M_Stockopname_print_queue', 'print_queue');
+        $username = (string)$this->session->userdata('username');
+
+        $this->print_queue->clear_queue($username);
+        return $this->json(true, 'Antrian cetak berhasil dikosongkan.');
+    }
 }

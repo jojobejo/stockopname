@@ -10,8 +10,10 @@
     $allowed_roles = ['DIREKTURCK', 'ADMLOG', 'MANAGERWH', 'SALESCK', 'MANAGERCK'];
     $CI =& get_instance();
     $masterUsername = strtolower(trim((string) $CI->session->userdata('username')));
-    $hasMasterUserManagementAccess = in_array($masterUsername, ['admin', 'admin1'], true);
-    $hasFullMasterUserAccess = ($masterUsername === 'admin');
+    $jobdeskSession = strtoupper(trim((string) $CI->session->userdata('jobdesk')));
+    $isSuperadmin = ($masterUsername === 'superadmin' || $jobdeskSession === 'SUPERADMIN');
+    $hasMasterUserManagementAccess = $isSuperadmin;
+    $hasFullMasterUserAccess = $isSuperadmin;
     $dynamicSidebarTree = [];
     if (isset($CI->db) && $CI->db->table_exists('tb_menu')) {
       $CI->load->model('master/M_Menu', 'sidebarMenuModel');
@@ -411,6 +413,7 @@
       </div>
     <?php endif; ?>
 
+    <?php /* Menu Pasang Aplikasi disembunyikan sementara untuk semua pengguna */ if (false): ?>
     <div class="sidebar">
       <nav class="mt-2" aria-label="Pemasangan aplikasi">
         <ul class="nav nav-pills nav-sidebar flex-column">
@@ -424,6 +427,7 @@
         <small class="d-block px-3 text-muted" data-device-label></small>
       </nav>
     </div>
+    <?php endif; ?>
 
     <!-- /.sidebar -->
   </aside>

@@ -3767,6 +3767,50 @@ class M_Stockopname extends CI_Model
         return $result;
     }
 
+    public function delete_catalog_qrcode($id, $expiredDate, $actor = '')
+    {
+        $id = (int)$id;
+        $expiredDate = trim((string)$expiredDate);
+        if ($id <= 0 || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $expiredDate)) {
+            return ['status' => false, 'message' => 'Identitas barang atau tanggal kadaluarsa tidak valid.'];
+        }
+
+        $saved = $this->catalog_qrcode_saved($id, $expiredDate);
+        if (!$saved) {
+            return ['status' => false, 'message' => 'QR Code belum pernah dibuat atau sudah dihapus.'];
+        }
+
+        if (!empty($saved['qrcode_file'])) {
+            $fullPath = FCPATH . $saved['qrcode_file'];
+            if (is_file($fullPath)) {
+                @unlink($fullPath);
+            }
+        }
+
+        $this->db->where('catalog_id', $id)->where('expired_date', $expiredDate)->delete('stockopname_catalog_qrcode');
+
+        $remaining = $this->db->where('catalog_id', $id)->count_all_results('stockopname_catalog_qrcode');
+        if ($remaining === 0 && $this->db->table_exists('tb_master_barang_all')) {
+            $this->db->where('id', $id)->update('tb_master_barang_all', ['qrcode' => null]);
+        }
+
+        if ($this->db->table_exists('stockopname_catalog_qr_issue')) {
+            $this->db->insert('stockopname_catalog_qr_issue', [
+                'catalog_id'    => $id,
+                'expired_date'  => $expiredDate,
+                'operation'     => 'delete',
+                'actor'         => mb_substr((string)$actor, 0, 128, 'UTF-8'),
+                'reason'        => 'Dihapus oleh Superadmin',
+                'previous_file' => $saved['qrcode_file'],
+                'qrcode_file'   => '',
+                'qrcode_value'  => $saved['qrcode_value'],
+                'issued_at'     => gmdate('Y-m-d H:i:s'),
+            ]);
+        }
+
+        return ['status' => true, 'message' => 'QR Code berhasil dihapus.'];
+    }
+
     public function master_import_fields()
     {
         return $this->db->field_data($this->masterTable);

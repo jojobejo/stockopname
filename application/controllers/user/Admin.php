@@ -8,6 +8,12 @@ class Admin extends CI_Controller
     function __construct()
     {
         parent::__construct();
+        if (!$this->session->userdata('logged_in')) redirect('Auth');
+        $username = strtolower(trim((string)$this->session->userdata('username')));
+        $jobdesk = strtoupper(trim((string)$this->session->userdata('jobdesk')));
+        if ($username !== 'superadmin' && $jobdesk !== 'SUPERADMIN') {
+            show_error('Anda tidak memiliki akses ke halaman ini. Akses dibatasi khusus Superadmin.', 403, 'Akses Ditolak');
+        }
         $this->load->model('M_User');
     }
 

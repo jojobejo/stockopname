@@ -90,7 +90,10 @@ class Auth extends CI_Controller
         $this->M_Auth->update_last_login($key->id, $auth_source);
         $this->M_Auth->log_login($key, 'success', 'Login berhasil');
 
-        if ($jobdesk_hrd === 'inputer_laporan') {
+        // Arahkan Superadmin, Admin, dan Admin1 langsung ke dashboard Stock Opname
+        if (in_array($username_login, ['superadmin', 'admin', 'admin1'], true) || $jobdesk === 'SUPERADMIN') {
+            redirect('admin/stockopname');
+        } else if ($jobdesk_hrd === 'inputer_laporan') {
             redirect('penilaian_lingkungan');
         } else if ($auth_source === 'tb_users' && !empty($key->default_redirect)) {
             redirect($key->default_redirect);

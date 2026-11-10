@@ -9,6 +9,11 @@ class C_Menu extends CI_Controller
         $this->load->model('master/M_Menu', 'model');
         $this->load->library('permission');
         if (!$this->session->userdata('logged_in')) redirect('Auth');
+        $username = strtolower(trim((string)$this->session->userdata('username')));
+        $jobdesk = strtoupper(trim((string)$this->session->userdata('jobdesk')));
+        if ($username !== 'superadmin' && $jobdesk !== 'SUPERADMIN') {
+            show_error('Anda tidak memiliki akses ke halaman ini. Akses dibatasi khusus Superadmin.', 403, 'Akses Ditolak');
+        }
         $this->permission->guard('master/menu');
     }
 

@@ -19,8 +19,10 @@ class C_Usermanagement extends CI_Controller
             redirect('Auth');
         }
         $username = strtolower(trim((string)$this->session->userdata('username')));
-        if (!in_array($username, ['admin', 'admin1'], true)) {
-            show_error('Anda tidak memiliki akses ke halaman ini.', 403);
+        $jobdesk = strtoupper(trim((string)$this->session->userdata('jobdesk')));
+        $isSuperadmin = ($username === 'superadmin' || $jobdesk === 'SUPERADMIN');
+        if (!$isSuperadmin) {
+            show_error('Anda tidak memiliki akses ke modul User Management. Akses dibatasi khusus Superadmin.', 403, 'Akses Ditolak');
         }
         $this->permission->guard('master/user-management');
     }

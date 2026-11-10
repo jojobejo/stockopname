@@ -16,15 +16,17 @@
   }
 
   function updateInstallControls() {
+    // Tombol atau menu pasang aplikasi disembunyikan sementara untuk semua pengguna
     document.querySelectorAll('[data-install-app]').forEach(function (button) {
-      button.hidden = installedHere || isInstalledDisplay();
-      button.style.display = button.hidden ? 'none' : '';
+      button.hidden = true;
+      button.style.display = 'none';
     });
     document.querySelectorAll('[data-install-label]').forEach(function (label) {
       label.textContent = isMobile ? 'Download pintasan aplikasi' : 'Pasang aplikasi di komputer';
     });
     document.querySelectorAll('[data-device-label]').forEach(function (label) {
-      label.textContent = isMobile ? 'Browser ponsel/tablet terdeteksi' : 'Browser PC/laptop terdeteksi';
+      label.textContent = '';
+      label.style.display = 'none';
     });
   }
 
