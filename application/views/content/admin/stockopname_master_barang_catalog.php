@@ -410,14 +410,15 @@ window.addEventListener('load', function () {
         submitPrint('queue');
     });
 
-    // Load antrian awal saat halaman siap
-    loadPrintQueue();
-
     // ==========================================
-    // DATATABLE MASTER BARANG
+    // DATATABLE MASTER BARANG (LAZY-LOAD)
     // ==========================================
     $.fn.dataTable.ext.errMode = 'none';
-    var table = $('#tableMasterBarangZahir').DataTable({
+    var table;
+    function initCatalogDatatable() {
+        if (table) return;
+        loadPrintQueue();
+        table = $('#tableMasterBarangZahir').DataTable({
         processing: true, serverSide: true, searching: true, ordering: false,
         pageLength: 10, lengthMenu: [[10, 25, 50], [10, 25, 50]], searchDelay: 450,
         ajax: {
@@ -531,6 +532,19 @@ window.addEventListener('load', function () {
             paginate: {next: 'Berikutnya', previous: 'Sebelumnya'}
         }
     });
+    }
+
+    <?php if ($embedded): ?>
+    if ($('#data-master-barang').hasClass('active') || window.location.hash === '#data-master-barang') {
+        initCatalogDatatable();
+    } else {
+        $('a[data-toggle="tab"][href="#data-master-barang"]').one('shown.bs.tab', function () {
+            initCatalogDatatable();
+        });
+    }
+    <?php else: ?>
+    initCatalogDatatable();
+    <?php endif; ?>
 
     $('#filterQrStatus').on('change', function () {
         $('.catalog-stat[data-status]').removeClass('active');

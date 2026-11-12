@@ -291,7 +291,7 @@
         <nav class="mt-2">
           <ul class="nav nav-pills nav-sidebar flex-column" data-widget="treeview" role="menu" data-accordion="false">
             <li class="nav-item">
-              <a href="<?php echo base_url('s') ?>" class="nav-link">
+              <a href="<?php echo base_url('admin/stockopname') ?>" class="nav-link">
                 <i class="nav-icon fas fa-home"></i>
                 <p>
                   Dashboard
@@ -303,6 +303,14 @@
                 <i class="nav-icon fas fa-mobile-alt"></i>
                 <p>
                   Input Opname
+                </p>
+              </a>
+            </li>
+            <li class="nav-item">
+              <a href="<?php echo base_url('admin/stockopname/master_opname') ?>" class="nav-link">
+                <i class="nav-icon fas fa-boxes"></i>
+                <p>
+                  Master Opname
                 </p>
               </a>
             </li>

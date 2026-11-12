@@ -90,8 +90,10 @@ class Auth extends CI_Controller
         $this->M_Auth->update_last_login($key->id, $auth_source);
         $this->M_Auth->log_login($key, 'success', 'Login berhasil');
 
-        // Arahkan Superadmin, Admin, dan Admin1 langsung ke dashboard Stock Opname
-        if (in_array($username_login, ['superadmin', 'admin', 'admin1'], true) || $jobdesk === 'SUPERADMIN') {
+        // Arahkan Jobdesk Stockopname langsung ke Input Opname
+        if ($jobdesk === 'STOCKOPNAME' || $username_login === 'stockopname') {
+            redirect('admin/stockopname/input');
+        } else if (in_array($username_login, ['superadmin', 'admin', 'admin1'], true) || in_array($jobdesk, ['SUPERADMIN', 'ADMIN_STOCKOPNAME'], true)) {
             redirect('admin/stockopname');
         } else if ($jobdesk_hrd === 'inputer_laporan') {
             redirect('penilaian_lingkungan');
@@ -114,7 +116,7 @@ class Auth extends CI_Controller
         } else if ($jobdesk == 'ADMINKEUTC') {
             redirect('keuangan');
         } else if ($jobdesk == 'STOCKOPNAME') {
-            redirect('stockopname/input');
+            redirect('admin/stockopname/input');
         } else if ($jobdesk == 'SUPERVISIOR_OPNAME') {
             redirect('supervisi-opname');
         } else if ($jobdesk == 'SALESONLINE') {

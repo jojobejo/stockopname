@@ -494,9 +494,10 @@ $(function () {
         return '<span class="om-code">' + escapeHtml(value) + '</span>';
     }
 
-    function detailInputButton(value) {
-        var kodeBarang = value || '';
-        var url = '<?= base_url('admin/stockopname/detail_input_opname') ?>?kode_barang=' + encodeURIComponent(kodeBarang);
+    function detailInputButton(value, type, row) {
+        var namaBarang = (row && row.nama_barang) || '';
+        var kodeBarang = (row && row.kode_barang) || value || '';
+        var url = '<?= base_url('admin/stockopname/detail_input_opname') ?>?' + (namaBarang ? 'nama_barang=' + encodeURIComponent(namaBarang) + '&' : '') + 'kode_barang=' + encodeURIComponent(kodeBarang);
         return '<a href="' + url + '" class="btn btn-outline-primary btn-sm om-action-btn" title="Detail input opname">' +
             '<i class="fas fa-eye"></i>' +
         '</a>';

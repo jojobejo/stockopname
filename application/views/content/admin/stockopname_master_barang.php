@@ -206,12 +206,14 @@ $qtyZeroCount = (int)($qty_zero_count ?? 0);
                                 <table class="table table-sm table-hover table-bordered w-100" id="tableMasterBarang">
                                     <thead>
                                         <tr>
+                                            <th>Kode Barang</th>
                                             <th>Nama Barang</th>
                                             <th>Expired Date</th>
                                             <th>Qty</th>
                                             <th>Qty Pcs</th>
                                             <th>Qty Box</th><th>Qty Pending</th><th>Pending Box</th><th>Pending Pcs</th>
-                                            <th># Status Master Barang</th>
+                                            <th>Status Master Barang</th>
+                                            <th class="text-center">#</th>
                                         </tr>
                                     </thead>
                                 </table>
@@ -259,6 +261,61 @@ $qtyZeroCount = (int)($qty_zero_count ?? 0);
                 <div class="modal-footer">
                     <button type="button" class="btn btn-outline-secondary" data-dismiss="modal">Batal</button>
                     <button type="submit" class="btn btn-primary" id="btnSimpanMaster"><i class="fas fa-save"></i> Simpan Master</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="modal fade" id="modalEditMasterOpname" tabindex="-1" role="dialog" aria-labelledby="modalEditMasterOpnameTitle" aria-hidden="true">
+        <div class="modal-dialog modal-lg" role="document">
+            <form class="modal-content" id="formEditMasterOpname" autocomplete="off">
+                <div class="modal-header bg-warning">
+                    <h5 class="modal-title font-weight-bold text-dark" id="modalEditMasterOpnameTitle"><i class="fas fa-pencil-alt mr-1"></i> Edit Data Master Opname</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Tutup"><span aria-hidden="true">&times;</span></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-danger d-none" id="editMasterOpnameAlert" role="alert"></div>
+                    <input type="hidden" name="id" id="editMasterId">
+                    <input type="hidden" id="editMasterDimensiVal" value="0">
+                    <div class="row">
+                        <div class="col-md-6 form-group">
+                            <label for="editMasterKodeBarang">Kode Barang</label>
+                            <input type="text" class="form-control" name="kode_barang" id="editMasterKodeBarang" maxlength="100" required>
+                        </div>
+                        <div class="col-md-6 form-group">
+                            <label for="editMasterDimensiDisplay">Dimensi (Pcs / Box)</label>
+                            <input type="text" class="form-control" id="editMasterDimensiDisplay" readonly>
+                        </div>
+                        <div class="col-12 form-group">
+                            <label for="editMasterNamaBarang">Nama Barang</label>
+                            <input type="text" class="form-control" name="nama_barang" id="editMasterNamaBarang" maxlength="255" required>
+                        </div>
+                        <div class="col-md-6 form-group">
+                            <label for="editMasterExpiredDate">Expired Date</label>
+                            <input type="date" class="form-control" name="expired_date" id="editMasterExpiredDate" required>
+                        </div>
+                        <div class="col-md-6 form-group">
+                            <label for="editMasterNoLot">No. Lot</label>
+                            <input type="text" class="form-control" name="no_lot" id="editMasterNoLot" maxlength="100" required>
+                        </div>
+                        <div class="col-md-4 form-group">
+                            <label for="editMasterQtyBox">Qty Box</label>
+                            <input type="number" class="form-control" name="qty_box" id="editMasterQtyBox" min="0" step="1" value="0" required>
+                        </div>
+                        <div class="col-md-4 form-group">
+                            <label for="editMasterQtyPcs">Qty Pcs</label>
+                            <input type="number" class="form-control" name="qty_pcs" id="editMasterQtyPcs" min="0" step="1" value="0" required>
+                        </div>
+                        <div class="col-md-4 form-group">
+                            <label for="editMasterQty">Qty Total</label>
+                            <input type="number" class="form-control" name="qty" id="editMasterQty" min="0" step="1" value="0" required>
+                        </div>
+                    </div>
+                    <small class="text-muted">Perubahan Qty Box atau Qty Pcs akan menghitung ulang Qty Total otomatis apabila dimensi tersedia.</small>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-dismiss="modal">Batal</button>
+                    <button type="submit" class="btn btn-warning font-weight-bold text-dark" id="btnSimpanEditMaster"><i class="fas fa-save"></i> Simpan Perubahan</button>
                 </div>
             </form>
         </div>
@@ -330,7 +387,11 @@ window.addEventListener('load', function () {
             url: '<?= base_url($routeBase . '/ajax-list') ?>',
             type: 'POST',
             data: function (d) {
-                d.search = {value: $('#mbSearch').val()};
+                // Sinkronkan nilai pencarian DataTables framework dan input kustom #mbSearch
+                var dtSearch = (d.search && typeof d.search.value === 'string') ? d.search.value.trim() : '';
+                var customSearch = $('#mbSearch').length ? $('#mbSearch').val().trim() : '';
+                var finalSearch = dtSearch !== '' ? dtSearch : customSearch;
+                d.search = {value: finalSearch};
                 d.qrcode_status = $('#mbStatusFilter').val();
                 d.refresh_catalog = refreshCatalogNext ? '1' : '0';
                 refreshCatalogNext = false;
@@ -342,6 +403,7 @@ window.addEventListener('load', function () {
             }
         },
         columns: [
+            {data: 'kode_barang', render: function (value) { return displayValue(value); }},
             {data: 'nama_barang'},
             {data: 'expired_date', render: function (value) { return formatExpiredDate(value); }},
             {data: 'qty', render: function (value) { return formatNumber(value); }},
@@ -352,6 +414,10 @@ window.addEventListener('load', function () {
             {data: 'pending_qty_pcs', orderable: false, render: formatNumber},
             {data: 'sync_status', orderable: false, searchable: false, render: function (value, type, row) {
                 return type === 'display' ? renderSyncStatus(value, row.sync_reason) : value;
+            }},
+            {data: null, orderable: false, searchable: false, className: 'text-center', render: function (value, type, row) {
+                if (type !== 'display') { return ''; }
+                return '<button type="button" class="btn btn-warning btn-sm mb-icon-btn btn-edit-master-opname" data-id="' + escapeHtml(row.id) + '" title="Edit Data Master Opname" data-toggle="tooltip"><i class="fas fa-pencil-alt"></i></button>';
             }}
         ],
         rowCallback: function (row, data) {
@@ -726,9 +792,25 @@ window.addEventListener('load', function () {
         }
     }
 
-    $('#mbSearch').on('keyup', function () {
-        selectedId = null;
-        table.ajax.reload();
+    var searchDebounceTimer = null;
+    $('#mbSearch').on('input keyup search change', function () {
+        clearTimeout(searchDebounceTimer);
+        var val = this.value;
+        searchDebounceTimer = setTimeout(function () {
+            selectedId = null;
+            var $dtInput = $('#tableMasterBarang_filter input');
+            if ($dtInput.length && $dtInput.val() !== val) {
+                $dtInput.val(val);
+            }
+            table.search(val).draw();
+        }, 300);
+    });
+
+    $(document).on('input keyup search change', '#tableMasterBarang_filter input', function () {
+        var val = this.value;
+        if ($('#mbSearch').val() !== val) {
+            $('#mbSearch').val(val);
+        }
     });
 
     $('#mbStatusFilter').on('change', function () {
@@ -1000,6 +1082,75 @@ window.addEventListener('load', function () {
         $('#formTambahMaster')[0].reset();
         hideMasterSearchResults();
         resetMasterSourceSelection();
+    });
+
+    $('#tableMasterBarang').on('click', '.btn-edit-master-opname', function () {
+        var rowData = table.row($(this).closest('tr')).data();
+        if (!rowData) {
+            toast('error', 'Data baris tidak ditemukan');
+            return;
+        }
+        $('[data-toggle="tooltip"]').tooltip('hide');
+        var dimensi = parseInt(rowData.dimensi || 0, 10) || 0;
+        var expVal = String(rowData.expired_date || '').trim();
+        var expMatch = expVal.match(/^(\d{4}-\d{2}-\d{2})/);
+        var formattedDate = expMatch ? expMatch[1] : expVal;
+
+        $('#editMasterOpnameAlert').addClass('d-none').empty();
+        $('#editMasterId').val(rowData.id || '');
+        $('#editMasterKodeBarang').val(rowData.kode_barang || '');
+        $('#editMasterNamaBarang').val(rowData.nama_barang || '');
+        $('#editMasterExpiredDate').val(formattedDate);
+        $('#editMasterNoLot').val(rowData.no_lot || '-');
+        $('#editMasterDimensiVal').val(dimensi);
+        $('#editMasterDimensiDisplay').val(dimensi > 0 ? formatNumber(dimensi) : '0');
+        $('#editMasterQty').val(parseInt(rowData.qty || 0, 10) || 0);
+        $('#editMasterQtyBox').val(parseInt(rowData.qty_box || 0, 10) || 0);
+        $('#editMasterQtyPcs').val(parseInt(rowData.qty_pcs || 0, 10) || 0);
+
+        $('#modalEditMasterOpname').modal('show');
+    });
+
+    $('#editMasterQtyBox, #editMasterQtyPcs').on('input', function () {
+        var dimensi = parseInt($('#editMasterDimensiVal').val() || 0, 10) || 0;
+        var qtyBox = Math.max(0, parseInt($('#editMasterQtyBox').val() || 0, 10) || 0);
+        var qtyPcs = Math.max(0, parseInt($('#editMasterQtyPcs').val() || 0, 10) || 0);
+        if (dimensi > 0) {
+            $('#editMasterQty').val((qtyBox * dimensi) + qtyPcs);
+        }
+    });
+
+    $('#formEditMasterOpname').on('submit', function (e) {
+        e.preventDefault();
+        var $button = $('#btnSimpanEditMaster');
+        var original = $button.html();
+        $('#editMasterOpnameAlert').addClass('d-none').empty();
+        $button.prop('disabled', true).html('<i class="fas fa-spinner fa-spin mr-1"></i> Menyimpan...');
+
+        $.ajax({
+            url: '<?= base_url('admin/stockopname/master_opname/update') ?>',
+            type: 'POST',
+            dataType: 'json',
+            data: $(this).serialize(),
+            success: function (res) {
+                if (!res.status) {
+                    $('#editMasterOpnameAlert').removeClass('d-none').text(res.message || 'Gagal memperbarui data master opname.');
+                    return;
+                }
+                $('#modalEditMasterOpname').modal('hide');
+                selectedId = $('#editMasterId').val();
+                table.ajax.reload(null, false);
+                loadSummary(false);
+                toast('success', res.message || 'Data master opname berhasil diperbarui');
+            },
+            error: function (xhr) {
+                var msg = ajaxMessage(xhr, 'Server gagal memperbarui data master opname');
+                $('#editMasterOpnameAlert').removeClass('d-none').text(msg);
+            },
+            complete: function () {
+                $button.prop('disabled', false).html(original);
+            }
+        });
     });
 
     loadSummary(false);
