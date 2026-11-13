@@ -2732,7 +2732,7 @@ class M_Stockopname extends CI_Model
         }
     }
 
-    private function master_barang_select()
+    private function master_barang_select($includeHeavy = true)
     {
         $catalogId = "(SELECT b.id FROM {$this->masterBarangAllTable} b
             WHERE b.nama_barang = {$this->masterTable}.nama_barang ORDER BY b.id ASC LIMIT 1) AS catalog_id";
@@ -2745,10 +2745,14 @@ class M_Stockopname extends CI_Model
         $qrcodeFile = $this->db->field_exists('qrcode_file', $this->masterTable) ? 'qrcode_file' : 'NULL AS qrcode_file';
         $qrcodeStatus = $this->db->field_exists('qrcode_status', $this->masterTable) ? 'qrcode_status' : 'NULL AS qrcode_status';
         $qrcodeError = $this->db->field_exists('qrcode_error_message', $this->masterTable) ? 'qrcode_error_message' : 'NULL AS qrcode_error_message';
-        $dimensi = $this->master_dimensi_select_sql();
+        $dimensi = $includeHeavy
+            ? $this->master_dimensi_select_sql()
+            : ($this->db->field_exists('dimensi', $this->masterTable)
+                ? 'COALESCE(dimensi, 0) AS dimensi'
+                : 'CASE WHEN COALESCE(qty_box, 0) > 0 THEN FLOOR((COALESCE(qty, 0) - COALESCE(qty_pcs, 0)) / qty_box) ELSE 0 END AS dimensi');
 
         $pendingSelect = '0 AS pending_qty, 0 AS pending_qty_box, 0 AS pending_qty_pcs';
-        if ($this->db->table_exists($this->pendingTable)) {
+        if ($includeHeavy && $this->db->table_exists($this->pendingTable)) {
             $parts = [];
             foreach (['qty', 'qty_box', 'qty_pcs'] as $qtyField) {
                 $parts[] = "(SELECT COALESCE(SUM(p.{$qtyField}), 0) FROM {$this->pendingTable} p
@@ -2837,7 +2841,19 @@ class M_Stockopname extends CI_Model
     private function master_barang_qrcode_filter($status)
     {
         if (in_array($status, ['generated', 'pending'], true) && $this->db->table_exists($this->masterBarangAllTable)) {
-            $exists = "EXISTS (SELECT 1 FROM {$this->masterBarangAllTable} b WHERE b.nama_barang = {$this->masterTable}.nama_barang AND TRIM(COALESCE(b.qrcode, '')) <> '' AND b.qrcode <> '-')";
+            if ($this->db->table_exists('stockopname_catalog_qrcode')) {
+                // Gunakan INNER JOIN agar kompatibel dengan MariaDB (menghindari error SUBQUERY in ROW in left expression of IN/ALL/ANY)
+                $exists = "EXISTS (
+                    SELECT 1 FROM stockopname_catalog_qrcode q
+                    INNER JOIN {$this->masterBarangAllTable} b ON b.id = q.catalog_id
+                    WHERE b.nama_barang = {$this->masterTable}.nama_barang
+                    AND q.expired_date = {$this->masterTable}.expired_date
+                    AND q.qrcode_value = CONCAT('MB|', q.catalog_id, '|', {$this->masterTable}.expired_date)
+                    AND TRIM(COALESCE(q.qrcode_file, '')) <> ''
+                )";
+            } else {
+                $exists = "EXISTS (SELECT 1 FROM {$this->masterBarangAllTable} b WHERE b.nama_barang = {$this->masterTable}.nama_barang AND TRIM(COALESCE(b.qrcode, '')) <> '' AND b.qrcode <> '-')";
+            }
             $this->db->where(($status === 'pending' ? 'NOT ' : '') . $exists, null, false);
             return;
         }
@@ -3358,10 +3374,208 @@ class M_Stockopname extends CI_Model
             ) b ON TRIM(REPLACE(m.nama_barang, '*', '')) = b.clean_name
             SET m.kode_barang = b.kd_barang
             WHERE m.kode_barang != b.kd_barang
+              AND NOT EXISTS (
+                  SELECT 1 FROM {$this->masterBarangAllTable} b2
+                  WHERE b2.kd_barang = m.kode_barang
+              )
         ";
 
         $this->db->query($sql);
         return (int)$this->db->affected_rows();
+    }
+
+    /**
+     * Sinkronisasi Data Master Opname (stockopname_master_item) dengan Data Master Barang (tb_master_barang_all)
+     * dan referensi LOT Zahir (stockopname_zahir_batch, stockopname_zahir_active, stockopname_zahir_qrlotexp).
+     */
+    public function sync_master_opname_with_master_barang($actor = 'system')
+    {
+        if (!$this->db->table_exists($this->masterTable) || !$this->db->table_exists($this->masterBarangAllTable)) {
+            return [
+                'status' => false,
+                'message' => 'Tabel master opname atau master barang belum tersedia.',
+            ];
+        }
+
+        $updatedNames = 0;
+        $updatedCodes = 0;
+        $createdCatalog = 0;
+        $syncedLots = 0;
+
+        // 1. Selaraskan nama_barang pada stockopname_master_item jika kode_barang cocok unik di tb_master_barang_all
+        //    tetapi nama_barang berbeda tanda baca (misal koma hilang saat ekspor CSV).
+        $sqlAlignName = "
+            UPDATE {$this->masterTable} m
+            INNER JOIN (
+                SELECT kd_barang, MAX(nama_barang) AS nama_barang, COUNT(*) AS cnt
+                FROM {$this->masterBarangAllTable}
+                WHERE TRIM(COALESCE(kd_barang, '')) <> ''
+                GROUP BY kd_barang
+                HAVING cnt = 1
+            ) b ON b.kd_barang = m.kode_barang
+            SET m.nama_barang = b.nama_barang
+            WHERE m.nama_barang <> b.nama_barang
+              AND NOT EXISTS (
+                  SELECT 1 FROM {$this->masterBarangAllTable} b_exact
+                  WHERE b_exact.nama_barang = m.nama_barang
+              )
+        ";
+        $this->db->query($sqlAlignName);
+        $updatedNames = max(0, (int)$this->db->affected_rows());
+
+        // 2. Selaraskan kode_barang jika nama_barang cocok persis tetapi kode_barang belum terdaftar
+        $updatedCodes = $this->sync_master_opname_codes_from_catalog();
+
+        // 3. Tambahkan barang baru dari stockopname_master_item yang belum ada sama sekali di tb_master_barang_all
+        $missingRows = $this->db->query("
+            SELECT
+                m.kode_barang,
+                MAX(m.nama_barang) AS nama_barang,
+                MAX(CASE WHEN COALESCE(m.qty_box, 0) > 0 AND COALESCE(m.qty, 0) > COALESCE(m.qty_pcs, 0)
+                    THEN FLOOR((COALESCE(m.qty, 0) - COALESCE(m.qty_pcs, 0)) / m.qty_box)
+                    ELSE 1 END) AS est_dimensi
+            FROM {$this->masterTable} m
+            WHERE COALESCE(m.qty, 0) > 0
+              AND TRIM(COALESCE(m.kode_barang, '')) <> ''
+              AND NOT EXISTS (
+                  SELECT 1 FROM {$this->masterBarangAllTable} b
+                  WHERE b.nama_barang = m.nama_barang OR b.kd_barang = m.kode_barang
+              )
+            GROUP BY m.kode_barang
+        ")->result_array();
+
+        foreach ($missingRows as $missing) {
+            $dim = max(1, (int)($missing['est_dimensi'] ?? 1));
+            $created = $this->create_master_barang_catalog([
+                'kd_barang' => trim((string)$missing['kode_barang']),
+                'nama_barang' => trim((string)$missing['nama_barang']),
+                'p' => $dim,
+                'l' => 1,
+                't' => 1,
+            ]);
+            if (!empty($created['status'])) {
+                $createdCatalog++;
+            }
+        }
+
+        // 4. Pastikan referensi snapshot LOT Zahir aktif dan tersinkron dengan stockopname_master_item
+        if ($this->db->table_exists('stockopname_zahir_batch')
+            && $this->db->table_exists('stockopname_zahir_active')
+            && $this->db->table_exists('stockopname_zahir_qrlotexp')
+        ) {
+            $this->load->config('zahir_stock_lot');
+            $sourceInstance = (string)($this->config->item('zahir_import_source_instance') ?: 'zahir-local');
+            $scope = (string)($this->config->item('zahir_import_scope') ?: 'all');
+
+            $activeRow = $this->db->query(
+                'SELECT a.batch_id, b.id AS batch_exists FROM stockopname_zahir_active a LEFT JOIN stockopname_zahir_batch b ON b.id = a.batch_id WHERE a.source_instance = ? AND a.scope = ? LIMIT 1',
+                [$sourceInstance, $scope]
+            )->row_array();
+
+            $batchId = (int)($activeRow['batch_id'] ?? 0);
+            if ($batchId <= 0) {
+                $maxBatch = $this->db->query('SELECT COALESCE(MAX(batch_id), 0) AS max_batch FROM stockopname_zahir_qrlotexp')->row_array();
+                $batchId = max(1, (int)($maxBatch['max_batch'] ?? 0));
+            }
+
+            $batchExists = (int)$this->db->where('id', $batchId)->count_all_results('stockopname_zahir_batch') > 0;
+            if (!$batchExists) {
+                $uuid = bin2hex(random_bytes(16));
+                $snapshotId = substr($uuid, 0, 8) . '-' . substr($uuid, 8, 4) . '-4' . substr($uuid, 13, 3) . '-a' . substr($uuid, 17, 3) . '-' . substr($uuid, 20, 12);
+                $checksum = hash('sha256', 'sync-master-opname-' . $batchId . '-' . $snapshotId);
+                $lotCount = (int)$this->db->where('batch_id', $batchId)->count_all_results('stockopname_zahir_qrlotexp');
+                $this->db->insert('stockopname_zahir_batch', [
+                    'id' => $batchId,
+                    'snapshot_id' => $snapshotId,
+                    'checksum' => $checksum,
+                    'source_instance' => $sourceInstance,
+                    'scope' => $scope,
+                    'exported_at' => null,
+                    'exported_epoch' => null,
+                    'imported_at' => gmdate('Y-m-d H:i:s'),
+                    'actor' => mb_substr((string)($actor ?: 'system'), 0, 128, 'UTF-8'),
+                    'input_format' => 'csv-v1',
+                    'source_file' => 'sync_master_opname.csv',
+                    'row_count' => $lotCount,
+                    'master_changes' => '[]',
+                    'previous_batch_id' => null,
+                ]);
+            }
+
+            $this->db->query(
+                'INSERT INTO stockopname_zahir_active (source_instance, scope, batch_id) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE batch_id = VALUES(batch_id)',
+                [$sourceInstance, $scope, $batchId]
+            );
+
+            // Sinkronkan pasangan (kode_barang, nama_barang, expired_date, qty) dari stockopname_master_item ke batch aktif
+            $maxSourceRow = (int)($this->db->query('SELECT COALESCE(MAX(source_row), 0) AS max_row FROM stockopname_zahir_qrlotexp WHERE batch_id = ?', [$batchId])->row_array()['max_row'] ?? 0);
+            $unmatchedLots = $this->db->query("
+                SELECT
+                    m.kode_barang,
+                    m.nama_barang,
+                    m.expired_date,
+                    SUM(COALESCE(m.qty, 0)) AS total_qty,
+                    COALESCE(
+                        (SELECT b.id FROM {$this->masterBarangAllTable} b WHERE b.nama_barang = m.nama_barang ORDER BY b.id ASC LIMIT 1),
+                        (SELECT b2.id FROM {$this->masterBarangAllTable} b2 WHERE b2.kd_barang = m.kode_barang ORDER BY b2.id ASC LIMIT 1)
+                    ) AS master_id
+                FROM {$this->masterTable} m
+                WHERE COALESCE(m.qty, 0) > 0
+                  AND NOT EXISTS (
+                      SELECT 1 FROM stockopname_zahir_qrlotexp z
+                      WHERE z.batch_id = ?
+                        AND (z.nama_normalized = TRIM(REPLACE(m.nama_barang, '*', '')) OR z.kode_barang = m.kode_barang)
+                        AND z.expired_date = m.expired_date
+                  )
+                GROUP BY m.kode_barang, m.nama_barang, m.expired_date
+            ", [$batchId])->result_array();
+
+            foreach ($unmatchedLots as $lot) {
+                $masterId = (int)($lot['master_id'] ?? 0);
+                if ($masterId <= 0) {
+                    continue;
+                }
+                $maxSourceRow++;
+                $normName = $this->normalized_master_name($lot['nama_barang']);
+                $inserted = $this->db->query(
+                    'INSERT IGNORE INTO stockopname_zahir_qrlotexp (batch_id, source_row, kode_barang, master_id, nama_sumber, nama_normalized, expired_date, qty_lot) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+                    [
+                        $batchId,
+                        $maxSourceRow,
+                        trim((string)$lot['kode_barang']),
+                        $masterId,
+                        trim((string)$lot['nama_barang']),
+                        $normName,
+                        trim((string)$lot['expired_date']),
+                        number_format((float)$lot['total_qty'], 6, '.', ''),
+                    ]
+                );
+                if ($inserted && $this->db->affected_rows() > 0) {
+                    $syncedLots++;
+                }
+            }
+
+            // Perbarui jumlah baris pada batch aktif
+            $totalBatchRows = (int)$this->db->where('batch_id', $batchId)->count_all_results('stockopname_zahir_qrlotexp');
+            $this->db->where('id', $batchId)->update('stockopname_zahir_batch', ['row_count' => $totalBatchRows]);
+        }
+
+        return [
+            'status' => true,
+            'message' => sprintf(
+                'Sinkronisasi selesai: %d nama barang diselaraskan, %d kode barang diselaraskan, %d barang baru ditambahkan ke Master Barang, dan %d kombinasi LOT/expired disinkronkan.',
+                $updatedNames,
+                $updatedCodes,
+                $createdCatalog,
+                $syncedLots
+            ),
+            'data' => [
+                'updated_names' => $updatedNames,
+                'updated_codes' => $updatedCodes,
+                'created_catalog' => $createdCatalog,
+                'synced_lots' => $syncedLots,
+            ],
+        ];
     }
 
     public function pending_master_options($limit = 5000)
@@ -3579,7 +3793,7 @@ class M_Stockopname extends CI_Model
         $orderDir = strtolower((string)($post['order'][0]['dir'] ?? 'asc')) === 'desc' ? 'DESC' : 'ASC';
         $filterByMasterQr = ($qrcodeStatus === 'mismatch');
 
-        $this->master_barang_select();
+        $this->master_barang_select(false);
         $this->master_barang_qty_filter($qtyMode);
         $this->master_barang_search($search);
         if (!$filterByMasterQr) { $this->master_barang_qrcode_filter($qrcodeStatus); }
@@ -3604,7 +3818,8 @@ class M_Stockopname extends CI_Model
             $recordsFiltered = $this->count_filtered_master_barang($search, $qrcodeStatus, $qtyMode);
         }
 
-        // Pengayaan variant QR, file checking, dan status sync HANYA untuk baris yang tampil di halaman aktif (maks 10-50 baris)
+        // Pengayaan dimensi, pending qty, variant QR, file checking, dan status sync HANYA untuk baris halaman aktif
+        $this->enrich_master_barang_rows($rows);
         $variants = $this->catalog_qrcode_variants(array_column($rows, 'catalog_id'));
         foreach ($rows as &$row) {
             $barcode = trim((string)($row['barcode'] ?? ''));
@@ -3627,6 +3842,66 @@ class M_Stockopname extends CI_Model
             'recordsFiltered' => $recordsFiltered,
             'data' => $rows,
         ];
+    }
+
+    /**
+     * Memperkaya dimensi dan pending_qty secara batch hanya untuk baris halaman aktif.
+     */
+    private function enrich_master_barang_rows(array &$rows)
+    {
+        if (empty($rows)) {
+            return;
+        }
+
+        // Batch dimensi dari tb_master_barang_all berdasarkan catalog_id
+        $catalogIds = array_values(array_unique(array_filter(array_map('intval', array_column($rows, 'catalog_id')))));
+        $dimMap = [];
+        if (!empty($catalogIds) && $this->db->table_exists($this->masterBarangAllTable)) {
+            $mbaRows = $this->db->select('id, p, l, t')
+                ->from($this->masterBarangAllTable)
+                ->where_in('id', $catalogIds)
+                ->get()
+                ->result_array();
+            foreach ($mbaRows as $mba) {
+                $dimMap[(int)$mba['id']] = (int)($mba['p'] ?? 0) * (int)($mba['l'] ?? 0) * (int)($mba['t'] ?? 0);
+            }
+        }
+
+        // Batch pending_qty dari stockopname_pending dalam 1 query
+        $pendingMap = [];
+        if ($this->db->table_exists($this->pendingTable)) {
+            $codes = array_values(array_unique(array_filter(array_map(function ($r) {
+                return trim((string)($r['kode_barang'] ?? ''));
+            }, $rows))));
+            if (!empty($codes)) {
+                $pendingRows = $this->db->select("kode_barang, expired_date, COALESCE(NULLIF(TRIM(no_lot), ''), '-') AS norm_lot, COALESCE(SUM(qty), 0) AS pending_qty, COALESCE(SUM(qty_box), 0) AS pending_qty_box, COALESCE(SUM(qty_pcs), 0) AS pending_qty_pcs", false)
+                    ->from($this->pendingTable)
+                    ->where_in('kode_barang', $codes)
+                    ->group_by(["kode_barang", "expired_date", "COALESCE(NULLIF(TRIM(no_lot), ''), '-')"], false)
+                    ->get()
+                    ->result_array();
+                foreach ($pendingRows as $p) {
+                    $key = $p['kode_barang'] . '|' . $p['expired_date'] . '|' . $p['norm_lot'];
+                    $pendingMap[$key] = $p;
+                }
+            }
+        }
+
+        foreach ($rows as &$row) {
+            $cid = (int)($row['catalog_id'] ?? 0);
+            if ($cid > 0 && isset($dimMap[$cid])) {
+                $row['dimensi'] = $dimMap[$cid];
+            }
+            $lot = trim((string)($row['no_lot'] ?? ''));
+            $normLot = $lot === '' ? '-' : $lot;
+            $pKey = ($row['kode_barang'] ?? '') . '|' . ($row['expired_date'] ?? '') . '|' . $normLot;
+            if (isset($pendingMap[$pKey])) {
+                $row['pending_qty'] = $pendingMap[$pKey]['pending_qty'];
+                $row['pending_qty_box'] = $pendingMap[$pKey]['pending_qty_box'];
+                $row['pending_qty_pcs'] = $pendingMap[$pKey]['pending_qty_pcs'];
+            }
+        }
+        unset($row);
     }
 
     public function master_barang_sync_status(array $row, $zahirCatalog = null)
@@ -4169,6 +4444,70 @@ class M_Stockopname extends CI_Model
         }
 
         return (int)$this->db->insert_id();
+    }
+
+    public function add_input_opname_detail($masterRow, $input, $actor = 'system', $keterangan = 'ADJUSTMENT')
+    {
+        if (!$this->ensure_opname_log_table()) {
+            return false;
+        }
+
+        $this->db->trans_start();
+        $newId = $this->save_mobile_opname($masterRow, $input);
+        if (!$newId) {
+            $this->db->trans_complete();
+            return false;
+        }
+
+        $newRow = $this->input_opname_row_by_id($newId);
+        if (!$newRow) {
+            $qtyPcs = (int)($input['qty_pcs'] ?? 0);
+            $qtyBox = (int)($input['qty_box'] ?? 0);
+            $dimensi = (int)($masterRow['dimensi'] ?? 0);
+            $newRow = [
+                'id' => (int)$newId,
+                'source_id' => (int)($masterRow['id'] ?? 0),
+                'kode_barang' => (string)($masterRow['kode_barang'] ?? ''),
+                'nama_barang' => (string)($masterRow['nama_barang'] ?? ''),
+                'expired_date' => (string)($masterRow['expired_date'] ?? ''),
+                'no_lot' => (string)($masterRow['no_lot'] ?? '-'),
+                'qty_box' => $qtyBox,
+                'qty_pcs' => $qtyPcs,
+                'qty' => ($qtyBox * $dimensi) + $qtyPcs,
+                'wilayah' => (int)($input['wilayah'] ?? 0),
+                'tim_opname' => (int)($input['tim_opname'] ?? 0),
+            ];
+        }
+
+        $timOpname = (int)($newRow['tim_opname'] ?? $input['tim_opname'] ?? 0);
+        $qtyTotal = (int)($newRow['qty'] ?? 0);
+        $qtyBoxVal = (int)($newRow['qty_box'] ?? 0);
+        $qtyPcsVal = (int)($newRow['qty_pcs'] ?? 0);
+        $ketText = trim((string)$keterangan) !== '' ? trim((string)$keterangan) : 'ADJUSTMENT';
+        $description = sprintf(
+            'Input opname ditambahkan (Tim %d, Qty: %d | Box: %d, PCS: %d) - Keterangan: %s',
+            $timOpname,
+            $qtyTotal,
+            $qtyBoxVal,
+            $qtyPcsVal,
+            $ketText
+        );
+
+        $this->insert_opname_edit_log(
+            [],
+            $newRow,
+            ['qty', 'qty_box', 'qty_pcs'],
+            $actor ?: (string)($input['input_by'] ?? 'system'),
+            'ADJUSTMENT',
+            $description
+        );
+        $this->db->trans_complete();
+
+        if (!$this->db->trans_status()) {
+            return false;
+        }
+
+        return (int)$newId;
     }
 
     public function save_manual_master_item_queue($masterRow, $input, $status)
@@ -4860,7 +5199,18 @@ class M_Stockopname extends CI_Model
         // Query cepat langsung dengan agregasi database berindeks
         $total = $this->count_all_master_barang($qtyMode);
 
-        $exists = "EXISTS (SELECT 1 FROM {$this->masterBarangAllTable} b WHERE (b.nama_barang = {$this->masterTable}.nama_barang) AND TRIM(COALESCE(b.qrcode, '')) <> '' AND b.qrcode <> '-')";
+        if ($this->db->table_exists('stockopname_catalog_qrcode')) {
+            $exists = "EXISTS (
+                SELECT 1 FROM stockopname_catalog_qrcode q
+                INNER JOIN {$this->masterBarangAllTable} b ON b.id = q.catalog_id
+                WHERE b.nama_barang = {$this->masterTable}.nama_barang
+                AND q.expired_date = {$this->masterTable}.expired_date
+                AND q.qrcode_value = CONCAT('MB|', q.catalog_id, '|', {$this->masterTable}.expired_date)
+                AND TRIM(COALESCE(q.qrcode_file, '')) <> ''
+            )";
+        } else {
+            $exists = "EXISTS (SELECT 1 FROM {$this->masterBarangAllTable} b WHERE (b.nama_barang = {$this->masterTable}.nama_barang) AND TRIM(COALESCE(b.qrcode, '')) <> '' AND b.qrcode <> '-')";
+        }
 
         $this->db->from($this->masterTable);
         $this->master_barang_qty_filter($qtyMode);

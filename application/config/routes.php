@@ -128,6 +128,7 @@ $route['admin/stockopname/master_barang/list']     = 'admin/C_Stockopname/ajax_m
 $route['admin/stockopname/master_barang/generate-qrcode'] = 'admin/C_Stockopname/ajax_generate_catalog_qrcode';
 $route['admin/stockopname/master_barang/generate-all-qrcode'] = 'admin/C_Stockopname/ajax_generate_all_catalog_qrcode';
 $route['admin/stockopname/master_opname/import'] = 'admin/C_Stockopname/ajax_import_master_opname';
+$route['admin/stockopname/master_opname/sync-master-barang'] = 'admin/C_Stockopname/ajax_sync_master_opname';
 $route['admin/stockopname/master_opname/template'] = 'admin/C_Stockopname/download_master_template';
 $route['admin/stockopname/master_opname/delete-count'] = 'admin/C_Stockopname/ajax_master_delete_count';
 $route['admin/stockopname/master_opname/delete'] = 'admin/C_Stockopname/ajax_master_delete';

@@ -58,7 +58,9 @@ class Auth extends CI_Controller
         $jobdesk_hrd = strtolower(trim((string)($key->jobdesk_hrd ?? '')));
         $jobdesk = strtoupper(trim((string)($key->jobdesk ?? $key->jabatan ?? '')));
         $username_login = strtolower(trim((string)($key->username ?? '')));
-        $is_admin_dashboard = ($username_login === 'admin' || ($akses_lv === 1 && $jobdesk === 'ADMIN'));
+        $is_admin_dashboard = in_array($username_login, ['admin', 'admin1', 'superadmin', 'stockopname'], true)
+            || in_array($jobdesk, ['SUPERADMIN', 'ADMIN_STOCKOPNAME', 'ADMIN_STOCKOPNAME_LOGISTIK'], true)
+            || ($akses_lv === 1 && $jobdesk === 'ADMIN');
         $nama = $key->nm_karyawan ?? $key->nama_lngkp ?? $key->nama_user ?? $key->username;
         $departemen = $key->departemen ?? $key->departement ?? null;
 
@@ -90,10 +92,10 @@ class Auth extends CI_Controller
         $this->M_Auth->update_last_login($key->id, $auth_source);
         $this->M_Auth->log_login($key, 'success', 'Login berhasil');
 
-        // Arahkan Jobdesk Stockopname langsung ke Input Opname
-        if ($jobdesk === 'STOCKOPNAME' || $username_login === 'stockopname') {
+        // Arahkan Jobdesk Stockopname (inputer lapangan) langsung ke Input Opname, sedangkan Admin/Superadmin ke Dashboard Stockopname
+        if ($jobdesk === 'STOCKOPNAME') {
             redirect('admin/stockopname/input');
-        } else if (in_array($username_login, ['superadmin', 'admin', 'admin1'], true) || in_array($jobdesk, ['SUPERADMIN', 'ADMIN_STOCKOPNAME'], true)) {
+        } else if (in_array($username_login, ['superadmin', 'admin', 'admin1', 'stockopname'], true) || in_array($jobdesk, ['SUPERADMIN', 'ADMIN_STOCKOPNAME', 'ADMIN_STOCKOPNAME_LOGISTIK'], true)) {
             redirect('admin/stockopname');
         } else if ($jobdesk_hrd === 'inputer_laporan') {
             redirect('penilaian_lingkungan');

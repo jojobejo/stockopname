@@ -106,6 +106,102 @@
           </ul>
         </nav>
       </div>
+    <?php elseif ($isSuperadmin) : ?>
+      <div class="sidebar">
+        <nav class="mt-2">
+          <ul class="nav nav-pills nav-sidebar flex-column" data-widget="treeview" role="menu" data-accordion="false">
+            <li class="nav-item">
+              <a href="<?= base_url('dashboard') ?>" class="nav-link <?= $activeSidebarPath === 'dashboard' ? 'active' : '' ?>">
+                <i class="nav-icon fas fa-tachometer-alt"></i>
+                <p>Dashboard Utama</p>
+              </a>
+            </li>
+            <li class="nav-item has-treeview <?= strpos($activeSidebarPath, 'admin/stockopname') === 0 || strpos($activeSidebarPath, 'stockopname') === 0 || strpos($activeSidebarPath, 'supervisi-opname') === 0 ? 'menu-open' : '' ?>">
+              <a href="#" class="nav-link">
+                <i class="nav-icon fas fa-boxes"></i>
+                <p>Stockopname <i class="right fas fa-angle-left"></i></p>
+              </a>
+              <ul class="nav nav-treeview">
+                <li class="nav-item">
+                  <a href="<?= base_url('admin/stockopname') ?>" class="nav-link <?= $activeSidebarPath === 'admin/stockopname' ? 'active' : '' ?>">
+                    <i class="fas fa-home nav-icon"></i><p>Dashboard Stockopname</p>
+                  </a>
+                </li>
+                <li class="nav-item">
+                  <a href="<?= base_url('admin/stockopname/monitoring') ?>" class="nav-link <?= $activeSidebarPath === 'admin/stockopname/monitoring' ? 'active' : '' ?>">
+                    <i class="fas fa-desktop nav-icon"></i><p>Monitoring</p>
+                  </a>
+                </li>
+                <li class="nav-item">
+                  <a href="<?= base_url('admin/stockopname/master_opname') ?>" class="nav-link <?= $activeSidebarPath === 'admin/stockopname/master_opname' ? 'active' : '' ?>">
+                    <i class="fas fa-layer-group nav-icon"></i><p>Master Opname &amp; Barang</p>
+                  </a>
+                </li>
+                <li class="nav-item">
+                  <a href="<?= base_url('admin/stockopname/barang-pending') ?>" class="nav-link <?= $activeSidebarPath === 'admin/stockopname/barang-pending' ? 'active' : '' ?>">
+                    <i class="fas fa-hourglass-half nav-icon"></i><p>Barang Pending</p>
+                  </a>
+                </li>
+                <li class="nav-item">
+                  <a href="<?= base_url('admin/stockopname/input') ?>" class="nav-link <?= $activeSidebarPath === 'admin/stockopname/input' ? 'active' : '' ?>">
+                    <i class="fas fa-mobile-alt nav-icon"></i><p>Input Opname</p>
+                  </a>
+                </li>
+                <li class="nav-item">
+                  <a href="<?= base_url('supervisi-opname') ?>" class="nav-link <?= $activeSidebarPath === 'supervisi-opname' ? 'active' : '' ?>">
+                    <i class="fas fa-clipboard-check nav-icon"></i><p>Supervisi Opname</p>
+                  </a>
+                </li>
+              </ul>
+            </li>
+            <li class="nav-item">
+              <a href="<?= base_url('logistik') ?>" class="nav-link <?= $activeSidebarPath === 'logistik' ? 'active' : '' ?>">
+                <i class="nav-icon fas fa-truck"></i><p>Logistik &amp; DO</p>
+              </a>
+            </li>
+            <li class="nav-item">
+              <a href="<?= base_url('ics/ics_diffrent') ?>" class="nav-link <?= strpos($activeSidebarPath, 'ics') === 0 ? 'active' : '' ?>">
+                <i class="nav-icon fas fa-warehouse"></i><p>Logistik ICS</p>
+              </a>
+            </li>
+            <li class="nav-item">
+              <a href="<?= base_url('checker') ?>" class="nav-link <?= strpos($activeSidebarPath, 'checker') === 0 ? 'active' : '' ?>">
+                <i class="nav-icon fas fa-clipboard-list"></i><p>Warehouse Checker</p>
+              </a>
+            </li>
+            <li class="nav-item">
+              <a href="<?= base_url('logistik/distibusi') ?>" class="nav-link <?= strpos($activeSidebarPath, 'logistik/distibusi') === 0 ? 'active' : '' ?>">
+                <i class="nav-icon fas fa-route"></i><p>Distribusi</p>
+              </a>
+            </li>
+            <li class="nav-item">
+              <a href="<?= base_url('sales_order') ?>" class="nav-link <?= strpos($activeSidebarPath, 'sales_order') === 0 ? 'active' : '' ?>">
+                <i class="nav-icon fas fa-shopping-cart"></i><p>Sales Order</p>
+              </a>
+            </li>
+            <li class="nav-item">
+              <a href="<?= base_url('keuangan') ?>" class="nav-link <?= $activeSidebarPath === 'keuangan' ? 'active' : '' ?>">
+                <i class="nav-icon fas fa-chart-line"></i><p>Keuangan &amp; Daily Stock</p>
+              </a>
+            </li>
+            <li class="nav-item">
+              <a href="<?= base_url('hrd/penilaian_lingkungan/admin') ?>" class="nav-link <?= strpos($activeSidebarPath, 'hrd/penilaian_lingkungan') === 0 ? 'active' : '' ?>">
+                <i class="nav-icon fas fa-building"></i><p>Penilaian Lingkungan</p>
+              </a>
+            </li>
+            <li class="nav-item">
+              <a href="<?= base_url('schedule_direktur') ?>" class="nav-link <?= $activeSidebarPath === 'schedule_direktur' ? 'active' : '' ?>">
+                <i class="nav-icon fas fa-calendar-alt"></i><p>Schedule Direktur</p>
+              </a>
+            </li>
+            <li class="nav-item">
+              <a href="<?= base_url('logout') ?>" class="nav-link">
+                <i class="nav-icon fas fa-sign-out-alt"></i><p>Log Out</p>
+              </a>
+            </li>
+          </ul>
+        </nav>
+      </div>
     <?php elseif ($this->session->userdata('lv') == '1' && $this->session->userdata('jobdesk') == 'ADMINKEU') : ?>
       <div class="sidebar">
         <!-- Sidebar Menu -->
@@ -285,41 +381,64 @@
         </nav>
         <!-- /.sidebar-menu -->
       </div>
-    <?php elseif ($this->session->userdata('lv') == '1' && $this->session->userdata('jobdesk') == 'STOCKOPNAME') : ?>
+    <?php elseif (in_array($jobdeskSession, ['STOCKOPNAME', 'ADMIN_STOCKOPNAME', 'ADMIN_STOCKOPNAME_LOGISTIK'], true) || in_array($masterUsername, ['admin', 'stockopname'], true)) : ?>
+      <?php
+      $isAdminStockopnameLogistikMenu = ($jobdeskSession === 'ADMIN_STOCKOPNAME_LOGISTIK' || $masterUsername === 'stockopname');
+      $isAdminStockopnameMenu = ($jobdeskSession === 'ADMIN_STOCKOPNAME' || ($masterUsername === 'admin' && !$isAdminStockopnameLogistikMenu));
+      ?>
       <div class="sidebar">
         <!-- Sidebar Menu -->
         <nav class="mt-2">
           <ul class="nav nav-pills nav-sidebar flex-column" data-widget="treeview" role="menu" data-accordion="false">
+            <?php if ($isAdminStockopnameMenu || $isAdminStockopnameLogistikMenu) : ?>
             <li class="nav-item">
-              <a href="<?php echo base_url('admin/stockopname') ?>" class="nav-link">
+              <a href="<?php echo base_url('admin/stockopname') ?>" class="nav-link <?= $activeSidebarPath === 'admin/stockopname' ? 'active' : '' ?>">
                 <i class="nav-icon fas fa-home"></i>
-                <p>
-                  Dashboard
-                </p>
+                <p>Dashboard</p>
               </a>
             </li>
+            <li class="nav-item">
+              <a href="<?php echo base_url('admin/stockopname/monitoring') ?>" class="nav-link <?= $activeSidebarPath === 'admin/stockopname/monitoring' ? 'active' : '' ?>">
+                <i class="nav-icon fas fa-desktop"></i>
+                <p>Monitoring Opname</p>
+              </a>
+            </li>
+            <li class="nav-item">
+              <a href="<?php echo base_url('admin/stockopname/master_opname') ?>" class="nav-link <?= $activeSidebarPath === 'admin/stockopname/master_opname' ? 'active' : '' ?>">
+                <i class="nav-icon fas fa-boxes"></i>
+                <p><?= $isAdminStockopnameLogistikMenu ? 'Master Barang' : 'Master Opname' ?></p>
+              </a>
+            </li>
+            <li class="nav-item">
+              <a href="<?php echo base_url('admin/stockopname/barang-pending') ?>" class="nav-link <?= $activeSidebarPath === 'admin/stockopname/barang-pending' ? 'active' : '' ?>">
+                <i class="nav-icon fas fa-hourglass-half"></i>
+                <p>Barang Pending</p>
+              </a>
+            </li>
+            <li class="nav-item">
+              <a href="<?php echo base_url('stockopname/input') ?>" class="nav-link <?= ($activeSidebarPath === 'stockopname/input' || $activeSidebarPath === 'admin/stockopname/input') ? 'active' : '' ?>">
+                <i class="nav-icon fas fa-mobile-alt"></i>
+                <p>Input Opname</p>
+              </a>
+            </li>
+            <?php else : ?>
             <li class="nav-item">
               <a href="<?php echo base_url('stockopname/input') ?>" class="nav-link">
                 <i class="nav-icon fas fa-mobile-alt"></i>
-                <p>
-                  Input Opname
-                </p>
+                <p>Input Opname</p>
               </a>
             </li>
             <li class="nav-item">
-              <a href="<?php echo base_url('admin/stockopname/master_opname') ?>" class="nav-link">
-                <i class="nav-icon fas fa-boxes"></i>
-                <p>
-                  Master Opname
-                </p>
+              <a href="<?php echo base_url('stockopname/history-input') ?>" class="nav-link">
+                <i class="nav-icon fas fa-history"></i>
+                <p>Histori Input</p>
               </a>
             </li>
+            <?php endif; ?>
             <li class="nav-item">
               <a href="<?php echo base_url('logout') ?>" class="nav-link">
                 <i class="nav-icon fas fa-sign-out-alt"></i>
-                <p>
-                  Log Out
-                </p>
+                <p>Log Out</p>
               </a>
             </li>
         </nav>

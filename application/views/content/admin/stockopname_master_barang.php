@@ -7,6 +7,11 @@ $showQtyZeroWidget = !empty($show_qty_zero_widget);
 $showResetQrcode = !isset($show_reset_qrcode) || !empty($show_reset_qrcode);
 $showStockCardRangePrint = !empty($show_stock_card_range_print);
 $qtyZeroCount = (int)($qty_zero_count ?? 0);
+$isSuperadmin = !empty($is_superadmin);
+$canViewMasterOpname = isset($can_view_master_opname) ? !empty($can_view_master_opname) : ($isSuperadmin || !empty($is_admin_stockopname));
+$canViewMasterBarang = isset($can_view_master_barang) ? !empty($can_view_master_barang) : ($isSuperadmin || !empty($is_admin_stockopname_logistik));
+$showBothTabs = ($canViewMasterOpname && $canViewMasterBarang);
+$isQtyZeroPage = !empty($is_qty_zero_page);
 ?>
 <body class="hold-transition sidebar-mini sidebar-collapse">
 <div class="wrapper">
@@ -18,7 +23,9 @@ $qtyZeroCount = (int)($qty_zero_count ?? 0);
     <?php $this->load->view('partial/main/sidebar') ?>
 
     <div class="content-wrapper master-barang-page">
+<?php if ($canViewMasterBarang) : ?>
 <?php $this->load->view('content/admin/stockopname_zahir_status'); ?>
+<?php endif; ?>
         <section class="content-header">
             <div class="container-fluid">
                 <div class="row align-items-center">
@@ -32,32 +39,37 @@ $qtyZeroCount = (int)($qty_zero_count ?? 0);
                         <a href="<?= base_url('admin/stockopname/input') ?>" class="btn btn-success btn-sm">
                             <i class="fas fa-mobile-alt"></i> Input Opname
                         </a>
-                        <?php if ($showQtyZeroWidget) : ?>
-                            <a href="<?= base_url('admin/stockopname/master_barang') ?>" class="btn btn-outline-primary btn-sm"><i class="fas fa-cubes"></i> Master Barang</a>
-                        <?php endif; ?>
-                        <?php if (!$showQtyZeroWidget) : ?>
+                        <?php if ($isQtyZeroPage) : ?>
                             <a href="<?= base_url('admin/stockopname/master_opname') ?>" class="btn btn-outline-primary btn-sm">
                                 <i class="fas fa-boxes"></i> Qty Aktif
                             </a>
                         <?php endif; ?>
-                        <button type="button" class="btn btn-primary btn-sm" id="btnTambahMaster" data-toggle="modal" data-target="#modalTambahMaster">
-                            <i class="fas fa-plus"></i> Tambah Master
-                        </button>
-                        <button type="button" class="btn btn-primary btn-sm" id="btnRefreshMasterBarang">
-                            <i class="fas fa-sync-alt"></i> Refresh
-                        </button>
+                        <?php if ($canViewMasterOpname) : ?>
+                            <button type="button" class="btn btn-primary btn-sm" id="btnTambahMaster" data-toggle="modal" data-target="#modalTambahMaster">
+                                <i class="fas fa-plus"></i> Tambah Master
+                            </button>
+                            <button type="button" class="btn btn-primary btn-sm" id="btnRefreshMasterBarang">
+                                <i class="fas fa-sync-alt"></i> Refresh
+                            </button>
+                        <?php endif; ?>
                     </div>
                 </div>
             </div>
         </section>
 
-        <?php if ($showQtyZeroWidget) : ?>
+        <?php if ($showBothTabs || $canViewMasterBarang) : ?>
         <nav class="px-3" aria-label="Data master stock opname"><ul class="nav nav-tabs" id="masterDataTabs" role="tablist">
-            <li class="nav-item"><a class="nav-link active" id="tab-master-opname" data-toggle="tab" href="#data-master-opname" role="tab" aria-controls="data-master-opname" aria-selected="true">Data Master Opname</a></li>
-            <li class="nav-item"><a class="nav-link" id="tab-master-barang" data-toggle="tab" href="#data-master-barang" role="tab" aria-controls="data-master-barang" aria-selected="false">Data Master Barang</a></li>
+            <?php if ($canViewMasterOpname) : ?>
+                <li class="nav-item"><a class="nav-link active" id="tab-master-opname" data-toggle="tab" href="#data-master-opname" role="tab" aria-controls="data-master-opname" aria-selected="true">Data Master Opname</a></li>
+            <?php endif; ?>
+            <?php if ($canViewMasterBarang) : ?>
+                <li class="nav-item"><a class="nav-link <?= !$canViewMasterOpname ? 'active' : '' ?>" id="tab-master-barang" data-toggle="tab" href="#data-master-barang" role="tab" aria-controls="data-master-barang" aria-selected="<?= !$canViewMasterOpname ? 'true' : 'false' ?>">Data Master Barang</a></li>
+            <?php endif; ?>
         </ul></nav>
-        <div class="tab-content"><div class="tab-pane fade show active" id="data-master-opname" role="tabpanel" aria-labelledby="tab-master-opname">
         <?php endif; ?>
+        <div class="tab-content">
+        <?php if ($canViewMasterOpname) : ?>
+        <div class="tab-pane fade show active" id="data-master-opname" role="tabpanel" aria-labelledby="tab-master-opname">
         <section class="content">
             <div class="container-fluid">
                 <style>
@@ -118,20 +130,37 @@ $qtyZeroCount = (int)($qty_zero_count ?? 0);
 
                 <div class="row">
                     <div class="col-12 mb-3"><div class="mb-panel p-3">
-                        <h2 class="mb-panel-title mb-2">Upload Master Opname</h2>
+                        <div class="d-flex flex-wrap align-items-center justify-content-between mb-2" style="gap:8px">
+                            <h2 class="mb-panel-title mb-0">Upload Master Opname</h2>
+                            <a href="<?= base_url('admin/stockopname/master_opname/template') ?>" class="btn btn-outline-success btn-sm">
+                                <i class="fas fa-download"></i> Download Template CSV
+                            </a>
+                        </div>
                         <div class="d-flex flex-wrap" style="gap:8px">
-                            <button type="button" class="btn btn-primary btn-sm master-upload" data-source="opname_master">Upload Master Opname</button>
-                            <button type="button" class="btn btn-info btn-sm master-upload" data-source="opname_it">Upload Master Opname IT</button>
-                            <input type="file" id="masterUploadFile" accept=".csv,text/csv" class="d-none">
+                            <button type="button" class="btn btn-primary btn-sm master-upload" data-source="opname_master">
+                                <i class="fas fa-file-upload"></i> Upload Master Opname
+                            </button>
+                            <?php if ($isSuperadmin) : ?>
+                                <button type="button" class="btn btn-info btn-sm master-upload" data-source="opname_it">
+                                    <i class="fas fa-server"></i> Upload Master Opname IT
+                                </button>
+                            <?php endif; ?>
+                            <button type="button" class="btn btn-success btn-sm" id="btnSyncMasterBarang">
+                                <i class="fas fa-sync"></i> Sinkronkan dengan Master Barang
+                            </button>
                         </div>
                         <div id="masterImportResult" role="status" class="mt-2"></div>
                     </div></div>
                     <div class="col-12 mb-3"><div class="mb-panel p-3">
                         <h2 class="mb-panel-title mb-2">Hapus Data Master Opname</h2>
                         <div class="d-flex flex-wrap" style="gap:8px">
-                            <button type="button" class="btn btn-danger btn-sm master-delete" data-scope="all">Hapus Semua Data</button>
+                            <?php if ($isSuperadmin) : ?>
+                                <button type="button" class="btn btn-danger btn-sm master-delete" data-scope="all">Hapus Semua Data</button>
+                            <?php endif; ?>
                             <button type="button" class="btn btn-outline-danger btn-sm master-delete" data-scope="opname_master">Hapus Data Opname Master</button>
-                            <button type="button" class="btn btn-outline-danger btn-sm master-delete" data-scope="opname_it">Hapus Data Opname IT</button>
+                            <?php if ($isSuperadmin) : ?>
+                                <button type="button" class="btn btn-outline-danger btn-sm master-delete" data-scope="opname_it">Hapus Data Opname IT</button>
+                            <?php endif; ?>
                         </div>
                     </div></div>
                     <div class="col-12 mb-3">
@@ -224,11 +253,83 @@ $qtyZeroCount = (int)($qty_zero_count ?? 0);
                 </div>
             </div>
         </section>
-        <?php if ($showQtyZeroWidget) : ?>
-        </div><div class="tab-pane fade" id="data-master-barang" role="tabpanel" aria-labelledby="tab-master-barang">
-            <?php $this->load->view('content/admin/stockopname_master_barang_catalog.php', ['embedded' => true]); ?>
-        </div></div>
+        </div>
         <?php endif; ?>
+        <?php if ($canViewMasterBarang) : ?>
+        <div class="tab-pane fade <?= !$canViewMasterOpname ? 'show active' : '' ?>" id="data-master-barang" role="tabpanel" aria-labelledby="tab-master-barang">
+            <?php $this->load->view('content/admin/stockopname_master_barang_catalog.php', [
+                'embedded' => true,
+                'is_superadmin' => $isSuperadmin,
+                'master_action_token' => $master_action_token ?? '',
+            ]); ?>
+        </div>
+        <?php endif; ?>
+        </div>
+    </div>
+
+    <?php if ($canViewMasterOpname) : ?>
+    <div class="modal fade" id="modalUploadMasterOpname" tabindex="-1" role="dialog" aria-labelledby="modalUploadMasterTitle" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable" role="document">
+            <form class="modal-content" id="formUploadMasterOpname" enctype="multipart/form-data" autocomplete="off">
+                <div class="modal-header bg-primary text-white" id="modalUploadMasterHeader">
+                    <h5 class="modal-title" id="modalUploadMasterTitle"><i class="fas fa-file-upload mr-2"></i>Upload Master Opname</h5>
+                    <button type="button" class="close text-white" data-dismiss="modal" aria-label="Tutup"><span aria-hidden="true">&times;</span></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" name="input_source" id="uploadMasterSource" value="opname_master">
+
+                    <div class="d-flex flex-wrap align-items-center justify-content-between p-3 mb-3 rounded border bg-light" style="gap:10px">
+                        <div>
+                            <div class="font-weight-bold text-dark">Template CSV Master Opname</div>
+                            <small class="text-muted">Gunakan template resmi agar urutan kolom dan format tanggal sesuai standar sistem.</small>
+                        </div>
+                        <a href="<?= base_url('admin/stockopname/master_opname/template') ?>" class="btn btn-success btn-sm" id="btnDownloadTemplateModal">
+                            <i class="fas fa-download"></i> Download Template CSV
+                        </a>
+                    </div>
+
+                    <div class="alert alert-info mb-3">
+                        <div class="d-flex align-items-center justify-content-between flex-wrap mb-2" style="gap:6px">
+                            <strong><i class="fas fa-clipboard-list mr-1"></i> SOP &amp; Ketentuan Upload Master Opname</strong>
+                            <span class="badge badge-dark" id="uploadSourceBadge">Sumber: opname_master</span>
+                        </div>
+                        <ol class="mb-2 pl-3 small">
+                            <li>Unduh dan gunakan template CSV melalui tombol <strong>Download Template CSV</strong> di atas.</li>
+                            <li>File wajib berformat <strong><code>.csv</code></strong> (mendukung pemisah koma <code>,</code> maupun titik koma <code>;</code> bawaan Excel Indonesia) dengan ukuran maksimal <strong>5 MB</strong> dan maksimal <strong>10.000 baris</strong> data.</li>
+                            <li>Baris pertama (header) wajib persis: <code>kode_barang, nama_barang, qty, qty_box, qty_pcs, expired_date</code>.</li>
+                            <li>Kolom <code>qty</code>, <code>qty_box</code>, dan <code>qty_pcs</code> wajib berisi bilangan bulat positif (<code>0</code> s/d <code>2147483647</code>).</li>
+                            <li>Kolom <code>expired_date</code> mendukung format <strong><code>YYYY-MM-DD</code></strong> (contoh: <code>2026-12-31</code>) maupun <strong><code>DD/MM/YYYY</code></strong> (contoh: <code>31/12/2026</code>).</li>
+                            <li>Baris dengan <code>nama_barang</code> dan <code>expired_date</code> yang sama dalam satu file akan otomatis dikonsolidasi/diakumulasi nilai qty-nya.</li>
+                        </ol>
+                        <div class="small bg-white border rounded p-2 text-monospace text-dark">
+                            kode_barang,nama_barang,qty,qty_box,qty_pcs,expired_date<br>
+                            BRG-001,OBAT CONTOH TABLET 500MG,100,2,50,2026-12-31
+                        </div>
+                    </div>
+
+                    <div class="form-group mb-2">
+                        <label for="masterUploadFile" class="font-weight-bold">Pilih Berkas CSV</label>
+                        <div class="custom-file">
+                            <input type="file" class="custom-file-input" id="masterUploadFile" name="file" accept=".csv,text/csv" required>
+                            <label class="custom-file-label" for="masterUploadFile" id="masterUploadFileLabel">Pilih file .csv (maks. 5 MB)...</label>
+                        </div>
+                        <small class="form-text text-muted" id="masterUploadFileMeta">Belum ada file yang dipilih.</small>
+                    </div>
+
+                    <div class="progress d-none mb-2" id="modalUploadProgressWrap" style="height:10px">
+                        <div class="progress-bar progress-bar-striped progress-bar-animated bg-primary" role="progressbar" style="width:100%"></div>
+                    </div>
+
+                    <div id="modalUploadMasterResult" class="mt-2 d-none" role="status" style="white-space:pre-line;max-height:200px;overflow:auto"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-dismiss="modal">Tutup</button>
+                    <button type="submit" class="btn btn-primary" id="btnSubmitUploadMaster">
+                        <i class="fas fa-upload"></i> Proses Upload CSV
+                    </button>
+                </div>
+            </form>
+        </div>
     </div>
 
     <div class="modal fade" id="modalTambahMaster" tabindex="-1" role="dialog" aria-labelledby="modalTambahMasterTitle" aria-hidden="true">
@@ -320,6 +421,7 @@ $qtyZeroCount = (int)($qty_zero_count ?? 0);
             </form>
         </div>
     </div>
+    <?php endif; ?>
 
     <footer class="main-footer">
         <strong>Copyright &copy; 2022 <a href="https://kiu.co.id">PT.KARISMA INDOARGO UNIVERSAL</a>.</strong>
@@ -330,24 +432,108 @@ $qtyZeroCount = (int)($qty_zero_count ?? 0);
     </footer>
 </div>
 
+<?php if ($canViewMasterOpname) : ?>
 <script>
 window.addEventListener('load', function () {
     var masterActionToken = '<?= html_escape($master_action_token ?? '') ?>';
-    var uploadSource = '';
-    $('.master-upload').on('click', function () { uploadSource = $(this).data('source'); $('#masterUploadFile').val('').trigger('click'); });
+    var uploadSource = 'opname_master';
+    var isUploadBusy = false;
+
+    function openUploadMasterModal(source) {
+        uploadSource = source === 'opname_it' ? 'opname_it' : 'opname_master';
+        var isIt = uploadSource === 'opname_it';
+        $('#uploadMasterSource').val(uploadSource);
+        $('#modalUploadMasterHeader')
+            .toggleClass('bg-primary', !isIt)
+            .toggleClass('bg-info', isIt);
+        $('#modalUploadMasterTitle').html(
+            '<i class="fas ' + (isIt ? 'fa-server' : 'fa-file-upload') + ' mr-2"></i>' +
+            (isIt ? 'Upload Master Opname IT (Khusus Superadmin)' : 'Upload Master Opname')
+        );
+        $('#uploadSourceBadge').text('Sumber: ' + uploadSource);
+        $('#formUploadMasterOpname')[0].reset();
+        $('#masterUploadFileLabel').text('Pilih file .csv (maks. 5 MB)...');
+        $('#masterUploadFileMeta').text('Belum ada file yang dipilih.');
+        $('#modalUploadProgressWrap').addClass('d-none');
+        $('#modalUploadMasterResult').addClass('d-none').removeClass('alert alert-success alert-danger').empty();
+        $('#modalUploadMasterOpname').modal('show');
+    }
+
+    $('.master-upload').on('click', function () {
+        openUploadMasterModal($(this).data('source'));
+    });
+
     $('#masterUploadFile').on('change', function () {
-        if (!this.files.length) { return; }
+        if (!this.files || !this.files.length) {
+            $('#masterUploadFileLabel').text('Pilih file .csv (maks. 5 MB)...');
+            $('#masterUploadFileMeta').text('Belum ada file yang dipilih.');
+            return;
+        }
+        var file = this.files[0];
+        var sizeKb = (file.size / 1024).toFixed(1);
+        $('#masterUploadFileLabel').text(file.name);
+        $('#masterUploadFileMeta').text('File terpilih: ' + file.name + ' (' + sizeKb + ' KB)');
+    });
+
+    $('#formUploadMasterOpname').on('submit', function (e) {
+        e.preventDefault();
+        if (isUploadBusy) { return; }
+        var fileInput = $('#masterUploadFile')[0];
+        if (!fileInput || !fileInput.files || !fileInput.files.length) {
+            toast('warning', 'Pilih berkas CSV terlebih dahulu.');
+            return;
+        }
         var label = uploadSource === 'opname_it' ? 'Opname IT' : 'Opname Master';
-        var form = new FormData(); form.append('file', this.files[0]); form.append('input_source', uploadSource); form.append('action_token', masterActionToken);
-        $('#masterImportResult').text('Mengimpor ' + label + '...');
-        $('.master-upload').prop('disabled', true);
-        $.ajax({url: '<?= base_url('admin/stockopname/master_opname/import') ?>', type: 'POST', data: form, processData: false, contentType: false, dataType: 'json'})
-            .done(function (res) {
-                var errors = (res.data && res.data.errors) || [];
-                $('#masterImportResult').text(res.message + (errors.length ? '\n' + errors.join('\n') : '')).css('white-space', 'pre-line').toggleClass('text-danger', !res.status);
-                if (res.status) { table.ajax.reload(null, false); loadSummary(false); }
-            }).fail(function () { $('#masterImportResult').text(label + ': server gagal memproses berkas.').addClass('text-danger'); })
-            .always(function () { $('.master-upload').prop('disabled', false); });
+        var form = new FormData();
+        form.append('file', fileInput.files[0]);
+        form.append('input_source', uploadSource);
+        form.append('action_token', masterActionToken);
+
+        isUploadBusy = true;
+        $('#btnSubmitUploadMaster').prop('disabled', true).html('<i class="fas fa-spinner fa-spin mr-1"></i> Mengimpor...');
+        $('#modalUploadProgressWrap').removeClass('d-none');
+        $('#modalUploadMasterResult').addClass('d-none').removeClass('alert alert-success alert-danger').empty();
+        $('#masterImportResult').text('Mengimpor ' + label + '...').removeClass('text-danger text-success');
+
+        $.ajax({
+            url: '<?= base_url('admin/stockopname/master_opname/import') ?>',
+            type: 'POST',
+            data: form,
+            processData: false,
+            contentType: false,
+            dataType: 'json'
+        }).done(function (res) {
+            var errors = (res.data && res.data.errors) || [];
+            var detailText = res.message + (errors.length ? '\n' + errors.join('\n') : '');
+            $('#modalUploadMasterResult')
+                .removeClass('d-none alert-success alert-danger')
+                .addClass('alert ' + (res.status ? 'alert-success' : 'alert-danger'))
+                .text(detailText);
+            $('#masterImportResult')
+                .text(detailText)
+                .css('white-space', 'pre-line')
+                .toggleClass('text-danger', !res.status)
+                .toggleClass('text-success', !!res.status);
+            if (res.status) {
+                if (table) { table.ajax.reload(null, false); }
+                loadSummary(false);
+                toast('success', res.message || 'Impor CSV berhasil.');
+            } else {
+                toast('error', res.message || 'Impor CSV gagal.');
+            }
+        }).fail(function (xhr) {
+            var msg = ajaxMessage(xhr, label + ': server gagal memproses berkas.');
+            $('#modalUploadMasterResult')
+                .removeClass('d-none alert-success')
+                .addClass('alert alert-danger')
+                .text(msg);
+            $('#masterImportResult').text(msg).addClass('text-danger');
+            toast('error', msg);
+        }).always(function () {
+            isUploadBusy = false;
+            $('#modalUploadProgressWrap').addClass('d-none');
+            $('#btnSubmitUploadMaster').prop('disabled', false).html('<i class="fas fa-upload"></i> Proses Upload CSV');
+        });
     });
     $('.master-delete').on('click', function () {
         var button = $(this), scope = button.data('scope'), label = button.text().trim();
@@ -360,6 +546,35 @@ window.addEventListener('load', function () {
                 window.alert(result.message); if (result.status) { table.ajax.reload(null, false); loadSummary(false); }
             }, 'json').always(function () { button.prop('disabled', false); });
         }, 'json');
+    });
+
+    $('#btnSyncMasterBarang').on('click', function () {
+        var $btn = $(this);
+        var origHtml = $btn.html();
+        $btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin"></i> Menyinkronkan...');
+        $.post('<?= base_url('admin/stockopname/master_opname/sync-master-barang') ?>', {action_token: masterActionToken}, function (res) {
+            $('#masterImportResult')
+                .text(res.message || '')
+                .toggleClass('text-danger', !res.status)
+                .toggleClass('text-success', !!res.status);
+            if (res.status) {
+                refreshCatalogNext = true;
+                if (table) { table.ajax.reload(null, false); }
+                loadSummary(false);
+                if (typeof window.refreshStockopnameZahirCatalog === 'function') {
+                    window.refreshStockopnameZahirCatalog(false);
+                }
+                toast('success', res.message || 'Sinkronisasi berhasil.');
+            } else {
+                toast('error', res.message || 'Sinkronisasi gagal.');
+            }
+        }, 'json').fail(function (xhr) {
+            var msg = ajaxMessage(xhr, 'Gagal menyinkronkan data dengan Master Barang.');
+            $('#masterImportResult').text(msg).addClass('text-danger');
+            toast('error', msg);
+        }).always(function () {
+            $btn.prop('disabled', false).html(origHtml);
+        });
     });
     var selectedId = null;
     var selectedPrintIds = {};
@@ -377,7 +592,9 @@ window.addEventListener('load', function () {
     };
     $('[data-toggle="tooltip"]').tooltip();
     var table;
-    table = $('#tableMasterBarang').DataTable({
+    function initMasterOpnameTable() {
+        if (table) { return; }
+        table = $('#tableMasterBarang').DataTable({
         processing: true,
         serverSide: true,
         responsive: true,
@@ -434,6 +651,7 @@ window.addEventListener('load', function () {
             $('[data-toggle="tooltip"]').tooltip();
         }
     });
+    }
 
     function selectedPrintIdList() {
         return Object.keys(selectedPrintIds).filter(function (id) {
@@ -908,7 +1126,7 @@ window.addEventListener('load', function () {
         loadSummary(true);
         loadFailedList();
     });
-    table.on('xhr.dt', function () {
+    $('#tableMasterBarang').on('xhr.dt', function () {
         if (refreshMasterBusy) {
             refreshMasterBusy = false;
             $('#btnRefreshMasterBarang').prop('disabled', false).html('<i class="fas fa-sync-alt"></i> Refresh');
@@ -1155,7 +1373,17 @@ window.addEventListener('load', function () {
 
     loadSummary(false);
     loadFailedList();
-    $('#masterDataTabs a[data-toggle="tab"]').on('shown.bs.tab', function () {
+    if (window.location.hash !== '#data-master-barang') {
+        initMasterOpnameTable();
+    } else {
+        $('#tab-master-opname').one('shown.bs.tab', function () {
+            initMasterOpnameTable();
+        });
+    }
+    $('#masterDataTabs a[data-toggle="tab"]').on('shown.bs.tab', function (e) {
+        if (e.target && e.target.id === 'tab-master-opname') {
+            initMasterOpnameTable();
+        }
         $.fn.dataTable.tables({visible: true, api: true}).columns.adjust();
     });
     window.addEventListener('hashchange', function () {
@@ -1165,3 +1393,4 @@ window.addEventListener('load', function () {
     if (window.location.hash === '#data-master-barang') { $('#tab-master-barang').tab('show'); }
 });
 </script>
+<?php endif; ?>

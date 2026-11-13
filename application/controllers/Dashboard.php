@@ -21,7 +21,10 @@ class Dashboard extends CI_Controller
         $lvuser     = (int)$this->session->userdata('lv');
         $jobdesk    = strtoupper(trim((string)$this->session->userdata('jobdesk')));
         $username   = strtolower(trim((string)$this->session->userdata('username')));
-        $is_admin_dashboard = (bool)$this->session->userdata('is_admin_dashboard') || $username === 'admin' || ($lvuser === 1 && $jobdesk === 'ADMIN');
+        $is_admin_dashboard = (bool)$this->session->userdata('is_admin_dashboard')
+            || in_array($username, ['admin', 'admin1', 'superadmin', 'stockopname'], true)
+            || in_array($jobdesk, ['SUPERADMIN', 'ADMIN_STOCKOPNAME', 'ADMIN_STOCKOPNAME_LOGISTIK'], true)
+            || ($lvuser === 1 && $jobdesk === 'ADMIN');
 
         $data['page_title'] = 'KARISMA';
         $data['is_admin_dashboard'] = $is_admin_dashboard;

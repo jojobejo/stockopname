@@ -268,7 +268,7 @@
                         <div class="col-md-3"><div class="so-field-card mb-3"><label>Qty Total</label><input type="number" class="form-control" id="input_qty" readonly></div></div>
                         <div class="col-md-6"><div class="so-field-card is-editable mb-3"><label>Qty Box</label><input type="number" class="form-control" name="qty_box" id="input_qty_box" min="0" step="1" required></div></div>
                         <div class="col-md-6"><div class="so-field-card is-editable mb-3"><label>Qty PCS</label><input type="number" class="form-control" name="qty_pcs" id="input_qty_pcs" min="0" step="1" required></div></div>
-                        <div class="col-md-12"><div class="so-field-card is-editable mb-3"><label>Keterangan</label><input type="text" class="form-control" name="keterangan" id="input_keterangan" maxlength="80" required></div></div>
+                        <div class="col-md-12"><div class="so-field-card is-editable mb-3"><label>Keterangan</label><input type="text" class="form-control" name="keterangan" id="input_keterangan" value="ADJUSTMENT" maxlength="80" required></div></div>
                     </div>
                 </div>
                 <div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-dismiss="modal">Batal</button><button type="submit" class="btn btn-primary" id="btnSaveInputOpname"><i class="fas fa-save"></i> Simpan Input</button></div>
@@ -436,7 +436,7 @@ $(function () {
         }
         $('#input_tim_opname').val(String(activeTeam));
         $('#input_qty_box,#input_qty_pcs').val(0);
-        $('#input_keterangan').val('');
+        $('#input_keterangan').val('ADJUSTMENT');
         var row = selectedInputMaster();
         inputDimensi = parseInt((row && row.dimensi) || productDimensi || 0, 10) || 0;
         $('#input_dimensi_text').text(inputDimensi.toLocaleString('id-ID'));

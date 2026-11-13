@@ -6,22 +6,36 @@ class C_Stockopname extends CI_Controller
     public function is_superadmin()
     {
         $username = strtolower(trim((string)$this->session->userdata('username')));
-        $jobdesk = strtoupper(trim((string)$this->session->userdata('jobdesk')));
+        $jobdesk = $this->session_jobdesk_code();
         return ($username === 'superadmin' || $jobdesk === 'SUPERADMIN');
+    }
+
+    public function is_admin_stockopname()
+    {
+        $username = strtolower(trim((string)$this->session->userdata('username')));
+        $jobdesk = $this->session_jobdesk_code();
+        return $jobdesk === 'ADMIN_STOCKOPNAME' || ($username === 'admin' && $jobdesk !== 'ADMIN_STOCKOPNAME_LOGISTIK');
+    }
+
+    public function is_admin_stockopname_logistik()
+    {
+        $username = strtolower(trim((string)$this->session->userdata('username')));
+        $jobdesk = $this->session_jobdesk_code();
+        return $jobdesk === 'ADMIN_STOCKOPNAME_LOGISTIK' || $username === 'stockopname';
     }
 
     public function is_stockopname()
     {
-        $username = strtolower(trim((string)$this->session->userdata('username')));
-        $jobdesk = strtoupper(trim((string)$this->session->userdata('jobdesk')));
-        return ($username === 'stockopname' || $jobdesk === 'STOCKOPNAME');
+        $jobdesk = $this->session_jobdesk_code();
+        return $this->is_admin_stockopname() || $this->is_admin_stockopname_logistik() || $jobdesk === 'STOCKOPNAME';
     }
 
     private function require_superadmin_master_opname()
     {
-        if (!$this->is_superadmin() && !$this->is_stockopname()) {
+        if (!$this->is_superadmin() && !$this->is_admin_stockopname()) {
             if ($this->input->is_ajax_request() || strtoupper((string)$this->input->method(true)) === 'POST') {
-                $this->json(false, 'Akses ditolak. Data Master Opname hanya dapat diakses oleh Superadmin dan User Stockopname.');
+                $this->json(false, 'Akses ditolak. Data Master Opname hanya dapat diakses oleh Superadmin dan Admin Stockopname.');
+                $this->output->_display();
                 exit;
             }
             show_error('Anda tidak memiliki akses ke Data Master Opname.', 403, 'Akses Ditolak');
@@ -47,8 +61,12 @@ class C_Stockopname extends CI_Controller
         $lvuser = (int)$this->session->userdata('lv');
         $jobdesk = $this->session_jobdesk_code();
         $username = strtolower(trim((string)$this->session->userdata('username')));
-        $isStockopname = ($username === 'stockopname' || $jobdesk === 'STOCKOPNAME');
-        $isAdminDashboard = (bool)$this->session->userdata('is_admin_dashboard') || in_array($username, ['admin', 'admin1', 'superadmin', 'stockopname'], true) || ($lvuser === 1 && $jobdesk === 'ADMIN') || $isStockopname;
+        $isAdminDashboard = (bool)$this->session->userdata('is_admin_dashboard')
+            || $this->is_superadmin()
+            || $this->is_admin_stockopname()
+            || $this->is_admin_stockopname_logistik()
+            || in_array($username, ['admin', 'admin1', 'superadmin', 'stockopname'], true)
+            || ($lvuser === 1 && $jobdesk === 'ADMIN');
 
         $method = $this->router->fetch_method();
         $inputMethods = [
@@ -121,6 +139,32 @@ class C_Stockopname extends CI_Controller
     {
         $date = DateTime::createFromFormat('Y-m-d', (string)$value);
         return $date && $date->format('Y-m-d') === $value;
+    }
+
+    private function normalize_import_expired_date($value)
+    {
+        $value = trim((string)$value);
+        if ($value === '') {
+            return '';
+        }
+        if ($this->valid_date($value)) {
+            return $value;
+        }
+        // Dukung format DD/MM/YYYY atau DD-MM-YYYY (bawaan Microsoft Excel regional Indonesia)
+        if (preg_match('/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/', $value, $matches)) {
+            $normalized = sprintf('%04d-%02d-%02d', (int)$matches[3], (int)$matches[2], (int)$matches[1]);
+            if ($this->valid_date($normalized)) {
+                return $normalized;
+            }
+        }
+        // Dukung format YYYY/MM/DD
+        if (preg_match('/^(\d{4})\/(\d{1,2})\/(\d{1,2})$/', $value, $matches)) {
+            $normalized = sprintf('%04d-%02d-%02d', (int)$matches[1], (int)$matches[2], (int)$matches[3]);
+            if ($this->valid_date($normalized)) {
+                return $normalized;
+            }
+        }
+        return '';
     }
 
     private function master_action_token()
@@ -900,9 +944,9 @@ class C_Stockopname extends CI_Controller
             return $this->json(false, 'Isi Qty Box atau Qty PCS terlebih dahulu.');
         }
 
-        $keterangan = trim((string)($input['keterangan'] ?? ''));
+        $keterangan = trim((string)($input['keterangan'] ?? 'ADJUSTMENT'));
         if ($keterangan === '') {
-            return $this->json(false, 'Keterangan wajib diisi.');
+            $keterangan = 'ADJUSTMENT';
         }
 
         $this->stockopname->ensure_master_code_columns();
@@ -912,19 +956,20 @@ class C_Stockopname extends CI_Controller
         }
 
         $inputBy = $this->session->userdata('username') ?: $this->session->userdata('nama') ?: $this->session->userdata('nik') ?: 'system';
+        $actor = $this->session->userdata('nama') ?: $this->session->userdata('username') ?: $this->session->userdata('nik') ?: 'system';
         $sourceUsername = preg_replace('/[^A-Za-z0-9]+/', '_', strtolower(trim((string)$inputBy)));
         $sourceKeterangan = preg_replace('/[^A-Za-z0-9]+/', '_', strtolower($keterangan));
         $inputSource = trim($sourceUsername, '_') . '_manual_' . trim($sourceKeterangan, '_');
         $inputSource = substr($inputSource, 0, 50);
 
-        $saved = $this->stockopname->save_mobile_opname($row, [
+        $saved = $this->stockopname->add_input_opname_detail($row, [
             'qty_pcs' => (int)$qtyPcs,
             'qty_box' => (int)$qtyBox,
             'input_by' => $inputBy,
             'wilayah' => $this->session->userdata('wilayah') ?: 0,
             'tim_opname' => $timOpname,
             'input_source' => $inputSource,
-        ]);
+        ], $actor, $keterangan);
 
         if (!$saved) {
             return $this->json(false, 'Gagal menyimpan data input opname.');
@@ -1530,61 +1575,65 @@ class C_Stockopname extends CI_Controller
     public function master_barang()
     {
         $isSuperadmin = $this->is_superadmin();
-        $isStockopname = $this->is_stockopname();
-        if ($isStockopname) {
-            $data['page_title'] = 'KARISMA ERP - Master Opname Stockopname';
-            $data['page_heading'] = 'Master Opname';
-            $data['table_title'] = 'Data Master Opname';
-            $data['route_base'] = 'admin/stockopname/master_opname';
-            $data['qrcode_route_base'] = 'admin/stockopname/qrcode';
-            $data['qty_zero_count'] = 0;
-            $data['show_qty_zero_widget'] = false;
-            $data['show_reset_qrcode'] = false;
-            $data['show_stock_card_range_print'] = false;
-            $data['is_superadmin'] = false;
-            $data['is_stockopname'] = true;
-            $data['master_action_token'] = $this->master_action_token();
-            $this->stockopname->ensure_qrcode_columns();
-
-            $this->load->view('partial/main/header.php', $data);
-            $this->load->view('content/admin/stockopname_master_barang.php', $data);
-            $this->load->view('partial/main/footer.php');
-            return;
-        }
-        if (!$isSuperadmin) {
-            $data['page_title'] = 'KARISMA ERP - Master Barang';
-            $data['page_heading'] = 'Master Barang';
-            $data['table_title'] = 'Data Master Barang';
-            $data['route_base'] = 'admin/stockopname/master_opname';
-            $data['qrcode_route_base'] = 'admin/stockopname/qrcode';
-            $data['qty_zero_count'] = 0;
-            $data['show_qty_zero_widget'] = false;
-            $data['show_reset_qrcode'] = false;
-            $data['show_stock_card_range_print'] = false;
-            $data['is_superadmin'] = false;
-            $data['is_stockopname'] = false;
-            $data['master_action_token'] = $this->master_action_token();
-            $this->stockopname->ensure_qrcode_columns();
-
-            $this->load->view('partial/main/header.php', $data);
-            $this->load->view('content/admin/stockopname_master_barang.php', $data);
-            $this->load->view('partial/main/footer.php');
-            return;
-        }
-
-        $data['page_title'] = 'KARISMA ERP - Master Opname Stockopname';
-        $data['page_heading'] = 'Master Opname';
-        $data['table_title'] = 'Data Master Opname';
-        $data['route_base'] = 'admin/stockopname/master_opname';
-        $data['qrcode_route_base'] = 'admin/stockopname/qrcode';
-        $data['qty_zero_count'] = 0;
-        $data['show_qty_zero_widget'] = true;
-        $data['show_reset_qrcode'] = true;
-        $data['show_stock_card_range_print'] = true;
-        $data['is_superadmin'] = true;
-        $data['is_stockopname'] = false;
-        $data['master_action_token'] = $this->master_action_token();
+        $isAdminStockopname = $this->is_admin_stockopname();
+        $isAdminLogistik = $this->is_admin_stockopname_logistik();
         $this->stockopname->ensure_qrcode_columns();
+
+        if ($isSuperadmin) {
+            $data = [
+                'page_title' => 'KARISMA ERP - Master Opname & Master Barang',
+                'page_heading' => 'Master Opname & Master Barang',
+                'table_title' => 'Data Master Opname',
+                'route_base' => 'admin/stockopname/master_opname',
+                'qrcode_route_base' => 'admin/stockopname/qrcode',
+                'qty_zero_count' => 0,
+                'can_view_master_opname' => true,
+                'can_view_master_barang' => true,
+                'show_qty_zero_widget' => true,
+                'show_reset_qrcode' => true,
+                'show_stock_card_range_print' => true,
+                'is_superadmin' => true,
+                'is_admin_stockopname' => false,
+                'is_admin_stockopname_logistik' => false,
+                'master_action_token' => $this->master_action_token(),
+            ];
+        } elseif ($isAdminStockopname && !$isAdminLogistik) {
+            $data = [
+                'page_title' => 'KARISMA ERP - Master Opname Stockopname',
+                'page_heading' => 'Master Opname',
+                'table_title' => 'Data Master Opname',
+                'route_base' => 'admin/stockopname/master_opname',
+                'qrcode_route_base' => 'admin/stockopname/qrcode',
+                'qty_zero_count' => 0,
+                'can_view_master_opname' => true,
+                'can_view_master_barang' => false,
+                'show_qty_zero_widget' => false,
+                'show_reset_qrcode' => false,
+                'show_stock_card_range_print' => false,
+                'is_superadmin' => false,
+                'is_admin_stockopname' => true,
+                'is_admin_stockopname_logistik' => false,
+                'master_action_token' => $this->master_action_token(),
+            ];
+        } else {
+            $data = [
+                'page_title' => 'KARISMA ERP - Master Barang Stockopname',
+                'page_heading' => 'Master Barang',
+                'table_title' => 'Data Master Barang',
+                'route_base' => 'admin/stockopname/master_opname',
+                'qrcode_route_base' => 'admin/stockopname/qrcode',
+                'qty_zero_count' => 0,
+                'can_view_master_opname' => false,
+                'can_view_master_barang' => true,
+                'show_qty_zero_widget' => false,
+                'show_reset_qrcode' => false,
+                'show_stock_card_range_print' => false,
+                'is_superadmin' => false,
+                'is_admin_stockopname' => false,
+                'is_admin_stockopname_logistik' => true,
+                'master_action_token' => $this->master_action_token(),
+            ];
+        }
 
         $this->load->view('partial/main/header.php', $data);
         $this->load->view('content/admin/stockopname_master_barang.php', $data);
@@ -1934,22 +1983,41 @@ class C_Stockopname extends CI_Controller
         }
         $handle = fopen($_FILES['file']['tmp_name'], 'rb');
         if (!$handle) { return $this->json(false, 'Berkas impor tidak dapat dibaca.'); }
-        $header = fgetcsv($handle);
+        $firstLine = fgets($handle);
+        if ($firstLine === false) { fclose($handle); return $this->json(false, 'Berkas impor kosong atau tidak dapat dibaca.'); }
         $expected = ['kode_barang', 'nama_barang', 'qty', 'qty_box', 'qty_pcs', 'expired_date'];
-        if ($header) { $header[0] = preg_replace('/^\xEF\xBB\xBF/', '', $header[0]); }
-        $header = array_map('trim', $header ?: []);
+        $delimiter = ',';
+        $header = [];
+        // Deteksi otomatis delimiter CSV: koma (,), titik koma (; bawaan Excel Indonesia), atau tab (\t)
+        foreach ([',', ';', "\t"] as $candidateDelimiter) {
+            $parsedHeader = str_getcsv($firstLine, $candidateDelimiter);
+            if ($parsedHeader) {
+                $parsedHeader[0] = preg_replace('/^\xEF\xBB\xBF/', '', (string)$parsedHeader[0]);
+            }
+            $parsedHeader = array_map(function ($col) {
+                return strtolower(trim((string)$col));
+            }, $parsedHeader ?: []);
+            if ($parsedHeader === $expected) {
+                $delimiter = $candidateDelimiter;
+                $header = $parsedHeader;
+                break;
+            }
+        }
         if ($header !== $expected) { fclose($handle); return $this->json(false, 'Header harus tepat: ' . implode(', ', $expected)); }
         $fields = $this->stockopname->master_import_fields();
         $rows = []; $errors = []; $line = 1;
-        while (($values = fgetcsv($handle)) !== false) {
+        while (($values = fgetcsv($handle, 0, $delimiter)) !== false) {
             $line++;
-            if (count($values) === 1 && trim($values[0]) === '') { continue; }
+            $nonEmpty = array_filter($values, function ($cell) { return trim((string)$cell) !== ''; });
+            if (empty($nonEmpty)) { continue; }
             if (count($values) !== 6) { $errors[] = 'Baris ' . $line . ': jumlah kolom harus 6.'; continue; }
             $values = array_map('trim', $values);
             if ($values[0] === '' || mb_strlen($values[0]) > 50 || $values[1] === '') { $errors[] = 'Baris ' . $line . ': kode atau nama barang kosong / kode terlalu panjang.'; continue; }
             $bad = false;
             foreach ([2, 3, 4] as $index) { if (!ctype_digit($values[$index]) || (float)$values[$index] > 2147483647) { $bad = true; } }
-            if ($bad || !$this->valid_date($values[5])) { $errors[] = 'Baris ' . $line . ': qty harus bilangan bulat 0..2147483647 dan expired_date YYYY-MM-DD valid.'; continue; }
+            $normalizedDate = $this->normalize_import_expired_date($values[5]);
+            if ($bad || $normalizedDate === '') { $errors[] = 'Baris ' . $line . ': qty harus bilangan bulat 0..2147483647 dan expired_date (YYYY-MM-DD atau DD/MM/YYYY) valid.'; continue; }
+            $values[5] = $normalizedDate;
             $row = array_combine($expected, $values);
             foreach (['qty', 'qty_box', 'qty_pcs'] as $field) { $row[$field] = (int)$row[$field]; }
             $row['input_source'] = $source;
@@ -1975,7 +2043,20 @@ class C_Stockopname extends CI_Controller
         if ($errors) { return $this->json(false, $label . ': impor dibatalkan; perbaiki kesalahan berikut.', ['imported' => 0, 'errors' => array_slice($errors, 0, 30)]); }
         if (!$rows) { return $this->json(false, $label . ': tidak ada baris data.'); }
         if (!$this->stockopname->insert_master_import($rows)) { return $this->json(false, $label . ': gagal menyimpan data; transaksi dibatalkan.'); }
-        $this->json(true, $label . ': ' . count($rows) . ' baris berhasil diimpor.', ['source' => $source, 'imported' => count($rows), 'errors' => []]);
+        $sync = $this->stockopname->sync_master_opname_with_master_barang((string)$this->session->userdata('username'));
+        $syncMsg = !empty($sync['message']) ? ' ' . $sync['message'] : '';
+        $this->json(true, $label . ': ' . count($rows) . ' baris berhasil diimpor.' . $syncMsg, ['source' => $source, 'imported' => count($rows), 'sync' => $sync['data'] ?? [], 'errors' => []]);
+    }
+
+    public function ajax_sync_master_opname()
+    {
+        $this->require_superadmin_master_opname();
+        if (!$this->master_action_allowed()) {
+            return $this->json(false, 'Request atau token keamanan tidak valid.');
+        }
+        $actor = (string)($this->session->userdata('username') ?: 'system');
+        $result = $this->stockopname->sync_master_opname_with_master_barang($actor);
+        return $this->json(!empty($result['status']), $result['message'] ?? 'Sinkronisasi selesai.', $result['data'] ?? []);
     }
 
     public function ajax_master_delete_count()
@@ -2124,6 +2205,7 @@ class C_Stockopname extends CI_Controller
     {
         $catalog = $this->stockopname->catalog_qrcode_by_names(array_column($rows, 'nama_barang'));
         $variants = $this->stockopname->catalog_qrcode_variants(array_column($catalog, 'id'));
+        $dirCache = [];
         foreach ($rows as &$row) {
             $norm = $this->stockopname->normalized_master_name($row['nama_barang']);
             $local = $catalog[$norm] ?? null;
@@ -2132,7 +2214,16 @@ class C_Stockopname extends CI_Controller
             $path = $saved ? $saved['qrcode_file'] : '';
             $row['qrcode_file'] = $path;
             $row['qrcode_recorded'] = (bool)$saved;
-            $ready = $local && $saved && $saved['qrcode_file'] === $path && $saved['qrcode_value'] === 'MB|' . (int)$local['id'] . '|' . $row['expired_date'] && is_file(FCPATH . $path);
+            $fileExists = false;
+            if ($path !== '') {
+                $dir = dirname($path);
+                if (!isset($dirCache[$dir])) {
+                    $fullDir = FCPATH . $dir;
+                    $dirCache[$dir] = is_dir($fullDir) ? array_flip(scandir($fullDir) ?: []) : [];
+                }
+                $fileExists = isset($dirCache[$dir][basename($path)]);
+            }
+            $ready = $local && $saved && $saved['qrcode_file'] === $path && $saved['qrcode_value'] === 'MB|' . (int)$local['id'] . '|' . $row['expired_date'] && $fileExists;
             $row['qrcode_url'] = $sourceVerified && $ready ? base_url($path) : '';
             $row['qrcode_status'] = !$sourceVerified ? 'unverified' : (!$local ? 'not_in_local'
                 : ($ready ? 'generated' : ($saved ? 'file_missing' : 'not_generated')));
@@ -2436,6 +2527,11 @@ class C_Stockopname extends CI_Controller
         $data['route_base'] = 'admin/stockopname/master_opname/qty-zero';
         $data['qrcode_route_base'] = 'admin/stockopname/qrcode/qty-zero';
         $data['qty_zero_count'] = $this->stockopname->count_all_master_barang('zero');
+        $data['can_view_master_opname'] = true;
+        $data['can_view_master_barang'] = false;
+        $data['is_qty_zero_page'] = true;
+        $data['is_superadmin'] = $this->is_superadmin();
+        $data['master_action_token'] = $this->master_action_token();
         $data['show_qty_zero_widget'] = false;
         $data['show_reset_qrcode'] = false;
         $data['show_stock_card_range_print'] = false;
@@ -2472,9 +2568,16 @@ class C_Stockopname extends CI_Controller
 
     private function master_barang_list_response($qtyMode)
     {
-        $this->require_superadmin_master_opname();
+        if (!$this->is_superadmin() && !$this->is_admin_stockopname()) {
+            return $this->raw_json([
+                'draw' => (int)$this->input->post('draw'),
+                'recordsTotal' => 0,
+                'recordsFiltered' => 0,
+                'data' => [],
+                'error' => 'Akses ditolak ke Data Master Opname.',
+            ]);
+        }
         session_write_close();
-        $this->stockopname->ensure_qrcode_columns();
         $this->load->library('Zahir_lot_catalog');
         $catalog = $this->zahir_lot_catalog->rows((string)$this->input->post('refresh_catalog', true) === '1');
         $byName = null;
